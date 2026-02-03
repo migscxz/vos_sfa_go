@@ -33,7 +33,7 @@ class QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                'Quick Actions',
+                'Bookings',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -49,7 +49,7 @@ class QuickActionsCard extends StatelessWidget {
               Expanded(
                 child: _QuickActionButton(
                   icon: Icons.add_shopping_cart_rounded,
-                  label: 'New Order',
+                  label: 'Encoding',
                   color: const Color(0xFF3B82F6),
                   onTap: () {
                     Navigator.of(context).push(

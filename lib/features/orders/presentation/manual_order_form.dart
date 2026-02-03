@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/theme/app_colors.dart';
 
 class ManualOrderFormBody extends StatelessWidget {
@@ -22,6 +23,7 @@ class ManualOrderFormBody extends StatelessWidget {
     required this.onSupplierChanged,
     required this.onProductChanged,
     required this.onPriceTypeChanged, // kept (unused)
+    this.onShowSupplierSearch,
   });
 
   final List<String> suppliers;
@@ -39,6 +41,9 @@ class ManualOrderFormBody extends StatelessWidget {
   final ValueChanged<String?> onProductChanged;
 
   final ValueChanged<String?> onPriceTypeChanged;
+
+  /// Callback to show supplier search dialog
+  final VoidCallback? onShowSupplierSearch;
 
   // Expected display format examples:
   //   "Base Name (PCS)"
@@ -84,7 +89,10 @@ class ManualOrderFormBody extends StatelessWidget {
     if (numPcs != null) return s.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
 
     // "UNIT x10" style -> "UNIT (10 PCS)"
-    final unitXCount = RegExp(r'^([A-Za-z]+)\s*x\s*(\d+(\.\d+)?)$', caseSensitive: false).firstMatch(s);
+    final unitXCount = RegExp(
+      r'^([A-Za-z]+)\s*x\s*(\d+(\.\d+)?)$',
+      caseSensitive: false,
+    ).firstMatch(s);
     if (unitXCount != null) {
       final unit = (unitXCount.group(1) ?? '').trim().toUpperCase();
       final count = (unitXCount.group(2) ?? '').trim();
@@ -120,19 +128,25 @@ class ManualOrderFormBody extends StatelessWidget {
 
     // Packaging options for selected base
     final List<String> packagingOptions =
-    (selectedBase != null ? (variantsByBaseSet[selectedBase]?.toList() ?? <String>[]) : <String>[])
-      ..sort();
+        (selectedBase != null
+              ? (variantsByBaseSet[selectedBase]?.toList() ?? <String>[])
+              : <String>[])
+          ..sort();
 
     // Ensure currently selected variant exists in packaging list
     final String? effectiveSelectedVariant =
-    (selectedProduct != null && packagingOptions.contains(selectedProduct)) ? selectedProduct : null;
+        (selectedProduct != null && packagingOptions.contains(selectedProduct))
+        ? selectedProduct
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // SUPPLIER
         DropdownButtonFormField<String>(
-          value: (selectedSupplier != null && suppliers.contains(selectedSupplier)) ? selectedSupplier : null,
+          initialValue: (selectedSupplier != null && suppliers.contains(selectedSupplier))
+              ? selectedSupplier
+              : null,
           decoration: InputDecoration(
             labelText: 'Supplier',
             hintText: 'Select supplier',
@@ -149,10 +163,12 @@ class ManualOrderFormBody extends StatelessWidget {
             ),
           ),
           items: suppliers
-              .map((s) => DropdownMenuItem<String>(
-            value: s,
-            child: Text(s, overflow: TextOverflow.ellipsis),
-          ))
+              .map(
+                (s) => DropdownMenuItem<String>(
+                  value: s,
+                  child: Text(s, overflow: TextOverflow.ellipsis),
+                ),
+              )
               .toList(),
           onChanged: onSupplierChanged,
           validator: (val) {
@@ -165,7 +181,7 @@ class ManualOrderFormBody extends StatelessWidget {
 
         // PARENT PRODUCT
         DropdownButtonFormField<String>(
-          value: selectedBase,
+          initialValue: selectedBase,
           decoration: InputDecoration(
             labelText: 'Product',
             hintText: parentProducts.isEmpty ? 'No products for this supplier' : 'Select product',
@@ -182,34 +198,36 @@ class ManualOrderFormBody extends StatelessWidget {
             ),
           ),
           items: parentProducts
-              .map((p) => DropdownMenuItem<String>(
-            value: p,
-            child: Text(p, overflow: TextOverflow.ellipsis),
-          ))
+              .map(
+                (p) => DropdownMenuItem<String>(
+                  value: p,
+                  child: Text(p, overflow: TextOverflow.ellipsis),
+                ),
+              )
               .toList(),
           onChanged: parentProducts.isEmpty
               ? null
               : (base) {
-            if (base == null) {
-              onProductChanged(null);
-              return;
-            }
+                  if (base == null) {
+                    onProductChanged(null);
+                    return;
+                  }
 
-            final variants = (variantsByBaseSet[base]?.toList() ?? <String>[])..sort();
+                  final variants = (variantsByBaseSet[base]?.toList() ?? <String>[])..sort();
 
-            // Prefer PCS variant if present, else pick first.
-            String? defaultVariant;
-            for (final v in variants) {
-              final unitLabel = _unitLabelFromDisplay(v);
-              if (_isPcsVariantLabel(unitLabel)) {
-                defaultVariant = v;
-                break;
-              }
-            }
-            defaultVariant ??= variants.isNotEmpty ? variants.first : null;
+                  // Prefer PCS variant if present, else pick first.
+                  String? defaultVariant;
+                  for (final v in variants) {
+                    final unitLabel = _unitLabelFromDisplay(v);
+                    if (_isPcsVariantLabel(unitLabel)) {
+                      defaultVariant = v;
+                      break;
+                    }
+                  }
+                  defaultVariant ??= variants.isNotEmpty ? variants.first : null;
 
-            onProductChanged(defaultVariant);
-          },
+                  onProductChanged(defaultVariant);
+                },
           validator: (val) {
             if (parentProducts.isEmpty) return null; // nothing to select
             if (val == null || val.trim().isEmpty) return 'Product is required';
@@ -221,7 +239,7 @@ class ManualOrderFormBody extends StatelessWidget {
 
         // UNIT / PACKAGING (VARIANT)
         DropdownButtonFormField<String>(
-          value: effectiveSelectedVariant,
+          initialValue: effectiveSelectedVariant,
           decoration: InputDecoration(
             labelText: 'Unit / Packaging',
             hintText: selectedBase == null
@@ -240,13 +258,15 @@ class ManualOrderFormBody extends StatelessWidget {
             ),
           ),
           items: packagingOptions
-              .map((v) => DropdownMenuItem<String>(
-            value: v,
-            child: Text(
-              _prettyPackagingLabel(v), // e.g. "PCS", "10 PCS", "BOX (10 PCS)"
-              overflow: TextOverflow.ellipsis,
-            ),
-          ))
+              .map(
+                (v) => DropdownMenuItem<String>(
+                  value: v,
+                  child: Text(
+                    _prettyPackagingLabel(v), // e.g. "PCS", "10 PCS", "BOX (10 PCS)"
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
               .toList(),
           onChanged: (selectedBase == null || packagingOptions.isEmpty) ? null : onProductChanged,
           validator: (val) {

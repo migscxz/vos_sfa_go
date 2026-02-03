@@ -1,22 +1,20 @@
-// lib/features/orders/presentation/order_form_page.dart
+// ib/features/orders/presentation/order_form_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:vos_sfa_go/core/api/api_config.dart';
+import 'package:vos_sfa_go/core/api/global_remote_api.dart';
+import 'package:vos_sfa_go/core/database/database_manager.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../data/models/customer_model.dart';
+import '../../../data/models/order_line_item.dart';
 import '../../../data/models/order_model.dart';
-import '../../../providers/order_providers.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/order_providers.dart';
 import '../../callsheet/presentation/callsheet_capture_page.dart';
-
-import 'package:vos_sfa_go/core/database/database_manager.dart';
-import 'package:vos_sfa_go/core/api/global_remote_api.dart';
-import 'package:vos_sfa_go/core/api/api_config.dart';
-
-import 'package:vos_sfa_go/features/orders/presentation/manual_order_form.dart';
-import 'callsheet_order_form_body.dart';
 
 class _ProductVariantMeta {
   final int productId; // variant product_id
@@ -30,6 +28,215 @@ class _ProductVariantMeta {
     required this.unitId,
     required this.unitCount,
   });
+}
+
+class SupplierSearchDialog extends StatefulWidget {
+  const SupplierSearchDialog({super.key, required this.suppliers});
+
+  final List<String> suppliers;
+
+  @override
+  State<SupplierSearchDialog> createState() => _SupplierSearchDialogState();
+}
+
+class _SupplierSearchDialogState extends State<SupplierSearchDialog> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<String> _filteredSuppliers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredSuppliers = widget.suppliers;
+    _searchCtrl.addListener(_filterSuppliers);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _filterSuppliers() {
+    final query = _searchCtrl.text.toLowerCase().trim();
+    if (query.isEmpty) {
+      setState(() => _filteredSuppliers = widget.suppliers);
+    } else {
+      setState(() {
+        _filteredSuppliers = widget.suppliers.where((supplier) {
+          return supplier.toLowerCase().contains(query);
+        }).toList();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Supplier'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Search suppliers...',
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredSuppliers.length,
+                itemBuilder: (context, index) {
+                  final supplier = _filteredSuppliers[index];
+                  return ListTile(
+                    title: Text(supplier),
+                    onTap: () => Navigator.of(context).pop(supplier),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+      ],
+    );
+  }
+}
+
+class MultiSelectProductDialog extends StatefulWidget {
+  const MultiSelectProductDialog({super.key, required this.products});
+
+  final List<String> products;
+
+  @override
+  State<MultiSelectProductDialog> createState() => _MultiSelectProductDialogState();
+}
+
+class _MultiSelectProductDialogState extends State<MultiSelectProductDialog> {
+  final Set<String> _selectedProducts = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Products'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: ListView.builder(
+          itemCount: widget.products.length,
+          itemBuilder: (context, index) {
+            final product = widget.products[index];
+            final isSelected = _selectedProducts.contains(product);
+            return CheckboxListTile(
+              title: Text(product),
+              value: isSelected,
+              onChanged: (bool? value) {
+                setState(() {
+                  if (value == true) {
+                    _selectedProducts.add(product);
+                  } else {
+                    _selectedProducts.remove(product);
+                  }
+                });
+              },
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_selectedProducts.toList()),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+}
+
+class CustomerSearchDialog extends StatefulWidget {
+  const CustomerSearchDialog({super.key, required this.customers});
+
+  final List<Customer> customers;
+
+  @override
+  State<CustomerSearchDialog> createState() => _CustomerSearchDialogState();
+}
+
+class _CustomerSearchDialogState extends State<CustomerSearchDialog> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<Customer> _filteredCustomers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCustomers = widget.customers;
+    _searchCtrl.addListener(_filterCustomers);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _filterCustomers() {
+    final query = _searchCtrl.text.toLowerCase().trim();
+    if (query.isEmpty) {
+      setState(() => _filteredCustomers = widget.customers);
+    } else {
+      setState(() {
+        _filteredCustomers = widget.customers.where((customer) {
+          return customer.name.toLowerCase().contains(query) ||
+              customer.code.toLowerCase().contains(query);
+        }).toList();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Customer'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Search customers...',
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredCustomers.length,
+                itemBuilder: (context, index) {
+                  final customer = _filteredCustomers[index];
+                  return ListTile(
+                    title: Text(customer.name),
+                    subtitle: Text(customer.code),
+                    onTap: () => Navigator.of(context).pop(customer),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+      ],
+    );
+  }
 }
 
 class OrderFormPage extends ConsumerStatefulWidget {
@@ -53,10 +260,14 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   final GlobalRemoteApi _remoteApi = GlobalRemoteApi();
 
-  OrderType _orderType = OrderType.manual;
-
   final TextEditingController _customerNameCtrl = TextEditingController();
   final TextEditingController _customerCodeCtrl = TextEditingController();
+
+  // Customer dropdown state
+  Customer? _selectedCustomer;
+  List<Customer> _customers = [];
+  final List<Customer> _filteredCustomers = [];
+  final TextEditingController _customerSearchCtrl = TextEditingController();
   final TextEditingController _poNumberCtrl = TextEditingController();
   final TextEditingController _quantityCtrl = TextEditingController(text: '1');
 
@@ -64,6 +275,11 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   String? _selectedProduct; // display string (variant)
   String? _selectedPriceType;
   String? _callsheetImagePath;
+
+  // Cart items for cart-style ordering
+  final List<OrderLineItem> _cartItems = [];
+
+  double get _grandTotal => _cartItems.fold(0.0, (sum, item) => sum + item.total);
 
   // === Supplier data from SQLite ===
   List<String> _suppliers = [];
@@ -103,7 +319,6 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     _customerNameCtrl.text = widget.initialCustomerName ?? '';
     _customerCodeCtrl.text = widget.initialCustomerCode ?? '';
-    _orderType = widget.initialType ?? OrderType.manual;
     _poNumberCtrl.text = '';
 
     // 🔹 Lock price type to logged-in salesman’s price_type
@@ -134,6 +349,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     setState(() => _isLoadingMasters = true);
 
     try {
+      await _loadCustomersFromDb();
       await _loadSuppliersFromDb();
       await _loadProductsFromDb();
     } catch (e) {
@@ -143,18 +359,136 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     }
   }
 
+  Future<void> _loadCustomersFromDb() async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbCustomer);
+
+    final rows = await db.query(
+      'customer',
+      columns: ['id', 'customer_name', 'customer_code', 'isActive'],
+    );
+
+    final List<Customer> customers = [];
+
+    for (final row in rows) {
+      final name = (row['customer_name'] ?? '').toString();
+      if (name.isEmpty) continue;
+
+      // only active
+      final rawIsActive = row['isActive'];
+      final isActiveInt = (rawIsActive is num) ? rawIsActive.toInt() : 1;
+      if (isActiveInt != 1) continue;
+
+      final rawId = row['id'];
+      final id = (rawId is num) ? rawId.toInt() : null;
+      if (id == null) continue;
+
+      final code = (row['customer_code'] ?? '').toString();
+
+      customers.add(Customer(id: id, name: name, code: code));
+    }
+
+    customers.sort((a, b) => a.name.compareTo(b.name));
+
+    _customers = customers;
+  }
+
+  void _showSupplierSearchDialog() async {
+    final selectedSupplier = await showDialog<String>(
+      context: context,
+      builder: (context) => SupplierSearchDialog(suppliers: _suppliers),
+    );
+
+    if (selectedSupplier != null) {
+      setState(() {
+        _selectedSupplier = selectedSupplier;
+        _selectedProduct = null;
+      });
+      _generatePoNumberForSupplier();
+    }
+  }
+
+  void _showCustomerSearchDialog() async {
+    final selectedCustomer = await showDialog<Customer>(
+      context: context,
+      builder: (context) => CustomerSearchDialog(customers: _customers),
+    );
+
+    if (selectedCustomer != null) {
+      setState(() {
+        _selectedCustomer = selectedCustomer;
+        _customerNameCtrl.text = selectedCustomer.name;
+        _customerCodeCtrl.text = selectedCustomer.code;
+      });
+    }
+  }
+
+  void _showMultiSelectProductDialog() async {
+    if (_selectedSupplier == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a supplier first')));
+      return;
+    }
+
+    final selectedProducts = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => MultiSelectProductDialog(products: _currentProducts),
+    );
+
+    if (selectedProducts != null && selectedProducts.isNotEmpty) {
+      setState(() {
+        for (final productDisplay in selectedProducts) {
+          final meta = _productMetaByDisplay[productDisplay];
+          if (meta != null) {
+            // Default to PCS variant if available, otherwise use the selected one
+            final defaultUnitDisplay = _getDefaultUnitForProduct(productDisplay);
+            _cartItems.add(
+              OrderLineItem(
+                productDisplay: productDisplay,
+                productId: meta.productId,
+                productBaseId: meta.baseId,
+                unitId: meta.unitId,
+                unitCount: meta.unitCount,
+                selectedUnitDisplay: defaultUnitDisplay,
+                quantity: 1,
+                price: 1500.0, // Default price, should be calculated from product data
+              ),
+            );
+          }
+        }
+      });
+    }
+  }
+
+  List<String> _getAvailableUnitsForProduct(String productDisplay) {
+    // For simplicity, return all variants of the same base product
+    final meta = _productMetaByDisplay[productDisplay];
+    if (meta == null) return [productDisplay];
+
+    final baseId = meta.baseId ?? meta.productId;
+    return _productMetaByDisplay.entries
+        .where((e) => (e.value.baseId ?? e.value.productId) == baseId)
+        .map((e) => e.key)
+        .toList();
+  }
+
+  String _getDefaultUnitForProduct(String productDisplay) {
+    // Prefer PCS variant if available
+    final availableUnits = _getAvailableUnitsForProduct(productDisplay);
+    for (final unit in availableUnits) {
+      if (unit.contains('(PCS)') || unit.contains('PCS')) {
+        return unit;
+      }
+    }
+    return availableUnits.isNotEmpty ? availableUnits.first : productDisplay;
+  }
+
   Future<void> _loadSuppliersFromDb() async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbCustomer);
 
     final rows = await db.query(
       'supplier',
-      columns: [
-        'id',
-        'supplier_name',
-        'supplier_shortcut',
-        'supplier_type',
-        'isActive',
-      ],
+      columns: ['id', 'supplier_name', 'supplier_shortcut', 'supplier_type', 'isActive'],
     );
 
     final List<String> names = [];
@@ -226,7 +560,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         if (unitId == null) continue;
 
         final sortOrderRaw = m['sort_order'] ?? m['order'];
-        final sortOrder = (sortOrderRaw is num) ? sortOrderRaw.toInt() : int.tryParse('$sortOrderRaw');
+        final sortOrder = (sortOrderRaw is num)
+            ? sortOrderRaw.toInt()
+            : int.tryParse('$sortOrderRaw');
 
         final row = <String, Object?>{
           'unit_id': unitId,
@@ -235,11 +571,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
           'sort_order': sortOrder,
         };
 
-        batch.insert(
-          'unit',
-          row,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        batch.insert('unit', row, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
       await batch.commit(noResult: true);
@@ -251,11 +583,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   // -------- UOM HELPERS --------
 
-  String _uomLabelFromMaps(
-      int? unitId,
-      Map<int, String> shortcutById,
-      Map<int, String> nameById,
-      ) {
+  String _uomLabelFromMaps(int? unitId, Map<int, String> shortcutById, Map<int, String> nameById) {
     if (unitId == null) return 'UOM';
 
     final sc = shortcutById[unitId];
@@ -284,10 +612,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   /// Fallback: infer UOM using unit master tokens; if not available, use common keyword fallback.
   String _uomLabelFromDescription(
-      String description,
-      Map<int, String> shortcutById,
-      Map<int, String> nameById,
-      ) {
+    String description,
+    Map<int, String> shortcutById,
+    Map<int, String> nameById,
+  ) {
     final d = description.trim().toLowerCase();
     if (d.isEmpty) return 'UOM';
 
@@ -311,8 +639,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       }
 
       // Prefer longest tokens first
-      final tokens = tokenToShortcut.keys.toList()
-        ..sort((a, b) => b.length.compareTo(a.length));
+      final tokens = tokenToShortcut.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
 
       for (final token in tokens) {
         if (d.endsWith(' $token') || d == token) {
@@ -383,10 +710,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         ],
       );
 
-      ppsRows = await dbSales.query(
-        'product_per_supplier',
-        columns: ['product_id', 'supplier_id'],
-      );
+      ppsRows = await dbSales.query('product_per_supplier', columns: ['product_id', 'supplier_id']);
 
       debugPrint(
         '[OrderForm] Loaded from dbSales → products=${productRows.length}, pps=${ppsRows.length}, units=${unitRows.length}',
@@ -464,8 +788,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       final parentId = (row['parent_id'] as num?)?.toInt();
       final baseId = parentId ?? pid;
 
-      final baseName = baseNameByBaseId[baseId] ??
-          (row['product_name'] ?? '').toString().trim();
+      final baseName = baseNameByBaseId[baseId] ?? (row['product_name'] ?? '').toString().trim();
       if (baseName.isEmpty) continue;
 
       final uomId = (row['unit_of_measurement'] as num?)?.toInt();
@@ -605,11 +928,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   }
 
   Future<void> _openCallsheetCapture() async {
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const CallsheetCapturePage(),
-      ),
-    );
+    final result = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const CallsheetCapturePage()));
 
     if (result != null && mounted) {
       setState(() => _callsheetImagePath = result);
@@ -632,94 +953,100 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     });
   }
 
-  void _saveOrder() {
+  void _saveOrder() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_orderType == OrderType.callsheet && _callsheetImagePath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please capture or attach a photo for callsheet order.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (_cartItems.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please add at least one product to the cart')));
       return;
     }
 
     final now = DateTime.now();
-    final int quantity = int.tryParse(_quantityCtrl.text) ?? 1;
-    final double estimatedTotal = quantity * 1500.00;
+    final supplierId = (_selectedSupplier != null) ? _supplierIdByName[_selectedSupplier!] : null;
 
-    final selectedDisplay = _selectedProduct;
-    final meta = (selectedDisplay != null)
-        ? _productMetaByDisplay[selectedDisplay]
-        : null;
-
-    final supplierId =
-    (_selectedSupplier != null) ? _supplierIdByName[_selectedSupplier!] : null;
-
+    // Create order header
     final order = OrderModel(
       orderNo: _poNumberCtrl.text.trim(),
       customerName: _customerNameCtrl.text.trim(),
       customerCode: _customerCodeCtrl.text.trim(),
       createdAt: now,
-      totalAmount: estimatedTotal,
+      totalAmount: _grandTotal,
       status: 'Pending',
-      type: _orderType,
-
+      type: OrderType.manual,
       supplier: _selectedSupplier,
       supplierId: supplierId,
-
-      product: selectedDisplay,
-      productId: meta?.productId,
-      productBaseId: meta?.baseId,
-      unitId: meta?.unitId,
-      unitCount: meta?.unitCount,
-
       priceType: _selectedPriceType,
-      quantity: quantity,
-
       hasAttachment: _callsheetImagePath != null,
       callsheetImagePath: _callsheetImagePath,
     );
 
-    ref.read(orderListProvider.notifier).addOrder(order);
+    try {
+      // Save order header to local storage
+      ref.read(orderListProvider.notifier).addOrder(order);
 
-    final summary = StringBuffer()
-      ..writeln('Order Type: ${_orderType == OrderType.manual ? "Manual" : "Callsheet"}')
-      ..writeln('Customer: ${order.customerName} (${order.customerCode})')
-      ..writeln('PO No: ${order.orderNo}')
-      ..writeln('Supplier: ${order.supplier}')
-      ..writeln('Product: ${order.product}')
-      ..writeln('Price Type: ${order.priceType}')
-      ..writeln('Quantity: ${order.quantity}')
-      ..writeln('Total: ₱${order.totalAmount.toStringAsFixed(2)}')
-      ..writeln('Attachment: ${order.hasAttachment ? "Yes" : "No"}');
+      // TODO: Save order details to database
+      // For now, we'll just show the summary
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 12),
-            Text('Order Saved'),
+      final summary = StringBuffer()
+        ..writeln('Order Type: Manual')
+        ..writeln('Customer: ${order.customerName} (${order.customerCode})')
+        ..writeln('PO No: ${order.orderNo}')
+        ..writeln('Supplier: ${order.supplier}')
+        ..writeln('Price Type: ${order.priceType}')
+        ..writeln('Items: ${_cartItems.length}')
+        ..writeln('Total: ₱${order.totalAmount.toStringAsFixed(2)}')
+        ..writeln('Attachment: ${order.hasAttachment ? "Yes" : "No"}')
+        ..writeln('')
+        ..writeln('Order Details:');
+
+      for (final item in _cartItems) {
+        summary.writeln(
+          '- ${item.productDisplay}: ${item.quantity} x ₱${item.price.toStringAsFixed(2)} = ₱${item.total.toStringAsFixed(2)}',
+        );
+      }
+
+      // Clear the form
+      setState(() {
+        _cartItems.clear();
+        _selectedSupplier = null;
+        _customerNameCtrl.clear();
+        _customerCodeCtrl.clear();
+        _poNumberCtrl.clear();
+        _callsheetImagePath = null;
+      });
+
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Text('Order Saved'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(summary.toString(), style: const TextStyle(fontSize: 14, height: 1.5)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
           ],
         ),
-        content: Text(
-          summary.toString(),
-          style: const TextStyle(fontSize: 14, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('Error saving order: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Error saving order. Please try again.')));
+    }
   }
 
   Widget _buildSectionHeader(String title, {IconData? icon}) {
@@ -744,79 +1071,6 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     );
   }
 
-  Widget _buildOrderTypeSelector(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildOrderTypeChip(
-              label: 'Manual Order',
-              icon: Icons.edit_note,
-              isSelected: _orderType == OrderType.manual,
-              onTap: () => setState(() => _orderType = OrderType.manual),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildOrderTypeChip(
-              label: 'Callsheet Order',
-              icon: Icons.camera_alt,
-              isSelected: _orderType == OrderType.callsheet,
-              onTap: () => setState(() => _orderType = OrderType.callsheet),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderTypeChip({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : AppColors.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppColors.textMuted,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -824,314 +1078,451 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Create New Order'),
-        centerTitle: false,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Create New Order'), centerTitle: false, elevation: 0),
       body: _isLoadingMasters
           ? const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text(
-              'Loading data...',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ],
-        ),
-      )
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading data...', style: TextStyle(color: AppColors.textMuted)),
+                ],
+              ),
+            )
           : SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Order Type
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(20),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionHeader('Order Type', icon: Icons.list_alt),
-                      _buildOrderTypeSelector(theme),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Customer Information
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionHeader(
-                        'Customer Information',
-                        icon: Icons.person_outline,
-                      ),
-                      TextFormField(
-                        controller: _customerNameCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Customer Name',
-                          hintText: 'Enter customer name',
-                          prefixIcon: const Icon(Icons.person, size: 20),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                        validator: (val) {
-                          if (val == null || val.trim().isEmpty) {
-                            return 'Customer name is required';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _customerCodeCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Customer Code',
-                          hintText: 'Enter customer code (optional)',
-                          prefixIcon: const Icon(Icons.badge, size: 20),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // PO Number
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionHeader('Sales Order', icon: Icons.receipt_long),
-                      TextFormField(
-                        controller: _poNumberCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'SO Number',
-                          hintText: 'Auto-generated after supplier selection',
-                          prefixIcon: const Icon(Icons.numbers, size: 20),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                        readOnly: true,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'SO number will be generated automatically based on selected supplier',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Order Details
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionHeader(
-                        'Order Details',
-                        icon: Icons.shopping_cart_outlined,
-                      ),
-
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
-                        child: Row(
-                          children: [
-                            Icon(Icons.local_offer_outlined,
-                                size: 18, color: AppColors.textMuted),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Price Type:',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textPrimary,
-                              ),
+                      // Customer Information
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            const SizedBox(width: 8),
-                            Chip(
-                              label: Text(
-                                displayPriceType,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionHeader('Customer Information', icon: Icons.person_outline),
+                            InkWell(
+                              onTap: _showCustomerSearchDialog,
+                              child: IgnorePointer(
+                                child: TextFormField(
+                                  controller: _customerNameCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: 'Customer Name',
+                                    hintText: 'Tap to search customers',
+                                    prefixIcon: const Icon(Icons.person, size: 20),
+                                    suffixIcon: const Icon(Icons.search, size: 20),
+                                    filled: true,
+                                    fillColor: Colors.grey[50],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: AppColors.border),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(color: AppColors.border),
+                                    ),
+                                  ),
+                                  validator: (val) {
+                                    if (val == null || val.trim().isEmpty) {
+                                      return 'Customer name is required';
+                                    }
+                                    return null;
+                                  },
                                 ),
                               ),
-                              backgroundColor: Colors.grey[100],
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _customerCodeCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'Customer Code',
+                                hintText: 'Enter customer code (optional)',
+                                prefixIcon: const Icon(Icons.badge, size: 20),
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
 
-                      if (_orderType == OrderType.manual)
-                        ManualOrderFormBody(
-                          suppliers: _suppliers,
-                          products: _currentProducts,
-                          priceTypes: _priceTypes,
-                          selectedSupplier: _selectedSupplier,
-                          selectedProduct: _selectedProduct,
-                          selectedPriceType: _selectedPriceType,
-                          quantityCtrl: _quantityCtrl,
-                          onSupplierChanged: (val) {
-                            setState(() {
-                              _selectedSupplier = val;
-                              _selectedProduct = null;
-                            });
-                            _generatePoNumberForSupplier();
-                          },
-                          onProductChanged: (val) {
-                            setState(() => _selectedProduct = val);
-                          },
-                          onPriceTypeChanged: (val) {},
-                        )
-                      else
-                        CallsheetOrderFormBody(
-                          suppliers: _suppliers,
-                          products: _currentProducts,
-                          priceTypes: _priceTypes,
-                          selectedSupplier: _selectedSupplier,
-                          selectedProduct: _selectedProduct,
-                          selectedPriceType: _selectedPriceType,
-                          quantityCtrl: _quantityCtrl,
-                          callsheetImagePath: _callsheetImagePath,
-                          onSupplierChanged: (val) {
-                            setState(() {
-                              _selectedSupplier = val;
-                              _selectedProduct = null;
-                            });
-                            _generatePoNumberForSupplier();
-                          },
-                          onProductChanged: (val) {
-                            setState(() => _selectedProduct = val);
-                          },
-                          onPriceTypeChanged: (val) {},
-                          onCaptureCallsheet: _openCallsheetCapture,
+                      const SizedBox(height: 16),
+
+                      // PO Number
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionHeader('Sales Order', icon: Icons.receipt_long),
+                            TextFormField(
+                              controller: _poNumberCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'SO Number',
+                                hintText: 'Auto-generated after supplier selection',
+                                prefixIcon: const Icon(Icons.numbers, size: 20),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                              ),
+                              readOnly: true,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'SO number will be generated automatically based on selected supplier',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Order Details
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionHeader(
+                              'Order Details',
+                              icon: Icons.shopping_cart_outlined,
+                            ),
+
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.local_offer_outlined,
+                                    size: 18,
+                                    color: AppColors.textMuted,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Price Type:',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Chip(
+                                    label: Text(
+                                      displayPriceType,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    backgroundColor: Colors.grey[100],
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Supplier Selection
+                            DropdownButtonFormField<String>(
+                              initialValue:
+                                  (_selectedSupplier != null &&
+                                      _suppliers.contains(_selectedSupplier))
+                                  ? _selectedSupplier
+                                  : null,
+                              decoration: InputDecoration(
+                                labelText: 'Supplier',
+                                hintText: 'Select supplier',
+                                prefixIcon: const Icon(Icons.storefront, size: 20),
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                              ),
+                              items: _suppliers
+                                  .map(
+                                    (s) => DropdownMenuItem<String>(
+                                      value: s,
+                                      child: Text(s, overflow: TextOverflow.ellipsis),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedSupplier = val;
+                                  _selectedProduct = null;
+                                });
+                                _generatePoNumberForSupplier();
+                              },
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty)
+                                  return 'Supplier is required';
+                                return null;
+                              },
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Add Products Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                onPressed: _showMultiSelectProductDialog,
+                                icon: const Icon(Icons.add_shopping_cart),
+                                label: const Text('Add Products'),
+                                style: ElevatedButton.styleFrom(
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Cart Items List
+                            if (_cartItems.isNotEmpty) ...[
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _cartItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = _cartItems[index];
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  item.productDisplay,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.delete, color: Colors.red),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _cartItems.removeAt(index);
+                                                  });
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: DropdownButtonFormField<String>(
+                                                  initialValue: item.selectedUnitDisplay,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Unit/Packaging',
+                                                    filled: true,
+                                                    fillColor: Colors.grey[50],
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                  ),
+                                                  items:
+                                                      _getAvailableUnitsForProduct(
+                                                            item.productDisplay,
+                                                          )
+                                                          .map(
+                                                            (unit) => DropdownMenuItem(
+                                                              value: unit,
+                                                              child: Text(unit),
+                                                            ),
+                                                          )
+                                                          .toList(),
+                                                  onChanged: (value) {
+                                                    if (value != null) {
+                                                      setState(() {
+                                                        _cartItems[index] = item.copyWith(
+                                                          selectedUnitDisplay: value,
+                                                        );
+                                                      });
+                                                    }
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: TextFormField(
+                                                  initialValue: item.quantity.toString(),
+                                                  keyboardType: TextInputType.number,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Quantity',
+                                                    filled: true,
+                                                    fillColor: Colors.grey[50],
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                  ),
+                                                  onChanged: (value) {
+                                                    final qty = int.tryParse(value) ?? 1;
+                                                    setState(() {
+                                                      _cartItems[index] = item.copyWith(
+                                                        quantity: qty,
+                                                      );
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Total: ₱${item.total.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.green,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Grand Total:',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      '₱${_grandTotal.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else ...[
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Text(
+                                    'No products added to cart yet.\nTap "Add Products" to get started.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: _saveOrder,
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text(
+                            'Save Order',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: _saveOrder,
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text(
-                      'Save Order',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const String baseUrl = "http://goatedcodoer:8091/items";
+  static const String baseUrl = "http://goatedcodoer:8056/items";
 
   static const String user = "/user";
   static const String salesman = "/salesman";

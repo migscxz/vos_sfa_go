@@ -1,6 +1,6 @@
 name: vos_sfa_go
 description: "A new Flutter project."
-publish_to: 'none' # Prevents publishing to pub.dev
+publish_to: "none" # Prevents publishing to pub.dev
 
 version: 1.0.0+1
 
@@ -27,6 +27,9 @@ dependencies:
 
   # For formatting dates in UI
   intl: ^0.19.0
+
+  # Searchable dropdown
+  dropdown_search: ^6.0.1
 
   # Future additions for offline-first SQLite layer:
   sqflite: ^2.4.1

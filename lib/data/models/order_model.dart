@@ -26,8 +26,8 @@ class OrderModel {
 
   // UI fields
   final OrderType type;
-  final String? supplier;       // display name (optional)
-  final int? supplierId;        // optional (recommended if you will post later)
+  final String? supplier; // display name (optional)
+  final int? supplierId; // optional (recommended if you will post later)
 
   /// IMPORTANT:
   /// This should now store the DISPLAY string (variant) from dropdown,
@@ -89,21 +89,21 @@ class OrderModel {
   // If you are mapping from `sales_order`, those columns will not exist (and that’s okay).
   factory OrderModel.fromSqlite(Map<String, dynamic> map) {
     return OrderModel(
-      id: (map['id'] as num?)?.toInt() ??
-          (map['order_id'] as num?)?.toInt(),
+      id: (map['id'] as num?)?.toInt() ?? (map['order_id'] as num?)?.toInt(),
 
       orderNo: (map['order_no'] ?? '').toString(),
 
       // Prefer explicit name if present; otherwise fallback to code.
-      customerName: (map['customer_name'] ?? map['customer_code'] ?? 'Unknown')
-          .toString(),
+      customerName: (map['customer_name'] ?? map['customer_code'] ?? 'Unknown').toString(),
 
       customerCode: map['customer_code']?.toString(),
 
-      createdAt: DateTime.tryParse((map['created_date'] ?? map['created_at'] ?? '').toString()) ??
+      createdAt:
+          DateTime.tryParse((map['created_date'] ?? map['created_at'] ?? '').toString()) ??
           DateTime.now(),
 
-      totalAmount: (map['total_amount'] as num?)?.toDouble() ??
+      totalAmount:
+          (map['total_amount'] as num?)?.toDouble() ??
           (map['net_amount'] as num?)?.toDouble() ??
           0.0,
 
