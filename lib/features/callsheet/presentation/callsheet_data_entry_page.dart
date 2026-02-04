@@ -28,7 +28,8 @@ class _CallsheetDataEntryPageState
   // --- A4 LANDSCAPE CONFIGURATION (~1123px total width) ---
   static const double leftColWidth = 180.0;
   static const double stdColWidth = 70.0;
-  static const double dayColWidth = 60.0;
+  static const double subColWidth = 70.0; // Widened for full text
+  static const double dayColWidth = subColWidth * 2; // Date Header Width
 
   // State
   bool _isLoading = true;
@@ -64,12 +65,12 @@ class _CallsheetDataEntryPageState
 
   Future<void> _handleUpload() async {
     // 1. Check PO Number
-    if (_poNumberCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a PO Number first.')),
-      );
-      return;
-    }
+    // if (_poNumberCtrl.text.trim().isEmpty) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('Please enter a PO Number first.')),
+    //   );
+    //   return;
+    // }
 
     // 2. Capture Image
     final imagePath = await Navigator.of(context).push<String>(
@@ -84,10 +85,10 @@ class _CallsheetDataEntryPageState
       final userId = user?.userId ?? 0;
 
       // Rename file to [OrderNo].jpg handling
-      final orderNo = _poNumberCtrl.text
-          .trim(); // Using PO as identifier for now
+      // final orderNo = _poNumberCtrl.text.trim();
+      // Using Timestamp since PO is hidden
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final appDir = await getApplicationDocumentsDirectory();
-      final fileName = '$orderNo.jpg';
       final newPath = p.join(appDir.path, fileName);
 
       await File(imagePath).copy(newPath);
@@ -150,34 +151,33 @@ class _CallsheetDataEntryPageState
           children: [
             _buildTopInfoSection(theme),
 
-            // PO Number Field
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Text(
-                    'PO Number: ',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _poNumberCtrl,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter PO Number or Scan...',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+            // PO Number Field (Commented out)
+            // Padding(
+            //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            //   child: Row(
+            //     children: [
+            //       const Text(
+            //         'PO Number: ',
+            //         style: TextStyle(fontWeight: FontWeight.bold),
+            //       ),
+            //       const SizedBox(width: 8),
+            //       Expanded(
+            //         child: TextField(
+            //           controller: _poNumberCtrl,
+            //           decoration: const InputDecoration(
+            //             hintText: 'Enter PO Number or Scan...',
+            //             border: OutlineInputBorder(),
+            //             isDense: true,
+            //             contentPadding: EdgeInsets.symmetric(
+            //               horizontal: 12,
+            //               vertical: 8,
+            //             ),
+            //           ),
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -271,12 +271,19 @@ class _CallsheetDataEntryPageState
 
   List<Widget> _buildHeaderWidgets() {
     var leftHeader = _buildHeaderCell(
-      "PRODUCT",
-      leftColWidth,
+      label: "PRODUCT",
+      width: leftColWidth,
       alignment: Alignment.centerLeft,
+      color: Colors.grey[200],
     );
 
-    List<Widget> rightHeaders = [_buildHeaderCell("PRICE", stdColWidth)];
+    List<Widget> rightHeaders = [
+      _buildHeaderCell(
+        label: "PRICE",
+        width: stdColWidth,
+        color: Colors.grey[200],
+      ),
+    ];
 
     for (String date in _orderDates) {
       // Format 2023-10-25 -> 10/25
@@ -286,64 +293,179 @@ class _CallsheetDataEntryPageState
         displayDate = DateFormat('MM/dd').format(dt);
       } catch (_) {}
 
-      rightHeaders.add(_buildHeaderCell(displayDate, dayColWidth));
+      // Double Header: Date on top, Quantity | Inventory below
+      rightHeaders.add(
+        _buildDoubleHeaderCell(
+          topLabel: displayDate,
+          subLabel1: "Quantity",
+          subLabel2: "Inventory",
+          width: dayColWidth,
+          color: Colors.grey[200],
+        ),
+      );
     }
 
     return [leftHeader, ...rightHeaders];
   }
 
-  Widget _buildHeaderCell(
-    String text,
-    double width, {
+  Widget _buildHeaderCell({
+    required String label,
+    String? subLabel,
+    required double width,
     Alignment alignment = Alignment.center,
+    Color? color,
   }) {
     return Container(
       width: width,
-      height: 40,
+      height: 50, // Increased height for double row
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          right: BorderSide(color: Colors.black, width: 1),
-          bottom: BorderSide(color: Colors.black, width: 1),
-          top: BorderSide(color: Colors.black, width: 1),
+      decoration: BoxDecoration(
+        color: color ?? Colors.white,
+        border: const Border(
+          bottom: BorderSide(color: Colors.black, width: 1.0),
+          right: BorderSide(color: Colors.black12, width: 0.5),
         ),
       ),
       alignment: alignment,
-      child: Text(
-        text,
-        maxLines: 2,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+      child: subLabel == null
+          ? Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  subLabel,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
+                    color: Colors.blue[800],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  // Double Header Cell (Date -> Qty | Inv)
+  Widget _buildDoubleHeaderCell({
+    required String topLabel,
+    required String subLabel1,
+    required String subLabel2,
+    required double width,
+    Color? color,
+  }) {
+    return Container(
+      width: width,
+      height: 50,
+      decoration: BoxDecoration(
+        color: color ?? Colors.white,
+        border: const Border(
+          bottom: BorderSide(color: Colors.black, width: 1.0),
+          right: BorderSide(color: Colors.black12, width: 0.5),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Top Part (Date)
+          Expanded(
+            child: Container(
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.black12, width: 0.5),
+                ),
+              ),
+              child: Text(
+                topLabel,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+          // Bottom Part (Qty | Inv)
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: Colors.black12, width: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      subLabel1,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    alignment: Alignment.center,
+                    child: Text(
+                      subLabel2,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLeftColumnItem(BuildContext context, int index) {
-    final item = _productsData[index];
+    final product = _productsData[index];
+    final isEven = index % 2 == 0;
+
     return Container(
       width: leftColWidth,
-      height: 30,
+      height: 48,
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Colors.black, width: 1),
-          bottom: BorderSide(color: Colors.black, width: 1),
-          left: BorderSide(color: Colors.black, width: 1),
+      decoration: BoxDecoration(
+        color: isEven ? Colors.white : Colors.grey[50], // Zebra striping
+        border: const Border(
+          bottom: BorderSide(color: Colors.black12, width: 0.5),
+          right: BorderSide(color: Colors.black12, width: 0.5),
         ),
       ),
       child: Text(
-        item['name'] ?? '',
-        style: const TextStyle(fontSize: 11),
+        product['name'] ?? '',
+        maxLines: 2,
         overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 12),
       ),
     );
   }
 
   Widget _buildRightColumnItems(BuildContext context, int index) {
-    final item = _productsData[index];
-    final history = item['history'] as Map<String, dynamic>? ?? {};
+    final product = _productsData[index];
+    final history = product['history'] as Map<String, dynamic>? ?? {};
+    final isEven = index % 2 == 0;
+    final rowColor = isEven ? Colors.white : Colors.grey[50];
 
     List<Widget> cells = [];
 
@@ -351,43 +473,66 @@ class _CallsheetDataEntryPageState
     cells.add(
       Container(
         width: stdColWidth,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: const BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.black, width: 1),
-            bottom: BorderSide(color: Colors.black, width: 1),
+        height: 48,
+        decoration: BoxDecoration(
+          color: rowColor,
+          border: const Border(
+            right: BorderSide(color: Colors.black12, width: 0.5),
+            bottom: BorderSide(color: Colors.black12, width: 0.5),
           ),
         ),
+        alignment: Alignment.center,
         child: Text(
-          (item['price'] as double).toStringAsFixed(2),
-          style: const TextStyle(fontSize: 11),
+          (product['price'] as double).toStringAsFixed(2),
+          style: const TextStyle(fontSize: 12),
         ),
       ),
     );
 
     // Dates
+    // Dates
     for (String date in _orderDates) {
-      final qty = history[date];
+      final qty = history[date]; // might be null
+      final displayQty = qty != null ? qty.toStringAsFixed(0) : '-';
+
+      // 1. Qty Cell
       cells.add(
         Container(
-          width: dayColWidth,
-          height: 30,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            border: Border(
-              right: BorderSide(color: Colors.black, width: 1),
-              bottom: BorderSide(color: Colors.black, width: 1),
+          width: subColWidth,
+          height: 48,
+          decoration: BoxDecoration(
+            color: rowColor,
+            border: const Border(
+              right: BorderSide(color: Colors.black12, width: 0.5),
+              bottom: BorderSide(color: Colors.black12, width: 0.5),
             ),
           ),
+          alignment: Alignment.center,
           child: Text(
-            qty != null ? qty.toStringAsFixed(0) : '-',
+            displayQty,
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: qty != null ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
               color: qty != null ? Colors.black : Colors.grey[300],
             ),
           ),
+        ),
+      );
+
+      // 2. Inv Cell (Placeholder)
+      cells.add(
+        Container(
+          width: subColWidth,
+          height: 48,
+          decoration: BoxDecoration(
+            color: rowColor,
+            border: const Border(
+              right: BorderSide(color: Colors.black12, width: 0.5),
+              bottom: BorderSide(color: Colors.black12, width: 0.5),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: const Text(''),
         ),
       );
     }

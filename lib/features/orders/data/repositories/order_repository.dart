@@ -5,6 +5,20 @@ import '../../../../data/models/order_model.dart';
 import '../models/cart_item_model.dart';
 
 class OrderRepository {
+  Future<List<OrderModel>> getOrdersByCustomer(String customerCode) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    final result = await db.query(
+      'sales_order',
+      where: 'customer_code = ?',
+      whereArgs: [customerCode],
+      orderBy: 'order_date DESC',
+    );
+
+    if (result.isEmpty) return [];
+
+    return result.map((json) => OrderModel.fromSqlite(json)).toList();
+  }
+
   Future<void> saveOrder(OrderModel order, List<CartItem> cartItems) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 
