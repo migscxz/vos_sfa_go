@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/customer_model.dart';
 import '../../../../data/models/order_model.dart';
 import '../../orders/data/repositories/order_repository.dart';

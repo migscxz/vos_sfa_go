@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:getwidget/getwidget.dart';
-import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_capture_page.dart';
 import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_data_entry_page.dart';
+import 'package:vos_sfa_go/features/monitoring/presentation/monitoring_order_list_page.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -64,14 +64,56 @@ class QuickActionsCard extends ConsumerWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Take Photo',
+                  icon: Icons.assignment_turned_in_rounded,
+                  label: 'Monitor',
                   color: const Color(0xFF10B981),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CallsheetCapturePage(),
-                      ),
+                    customersAsync.when(
+                      data: (customers) async {
+                        if (customers.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No customers with order history found.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        Customer? selectedCustomer;
+
+                        await showDialog(
+                          context: context,
+                          builder: (context) => CustomerPickerModal(
+                            customers: customers,
+                            selectedCustomer: null,
+                            onCustomerSelected: (customer) {
+                              selectedCustomer = customer;
+                            },
+                          ),
+                        );
+
+                        if (selectedCustomer != null && context.mounted) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MonitoringOrderListPage(
+                                customer: selectedCustomer!,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      error: (err, stack) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $err')));
+                      },
+                      loading: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Loading customers...')),
+                        );
+                      },
                     );
                   },
                 ),
