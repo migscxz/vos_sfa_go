@@ -19,6 +19,27 @@ class OrderRepository {
     return result.map((json) => OrderModel.fromSqlite(json)).toList();
   }
 
+  Future<List<OrderModel>> getPendingOrdersByCustomer(
+    String customerCode,
+  ) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    final result = await db.query(
+      'sales_order',
+      where: 'customer_code = ? AND is_synced = 0',
+      whereArgs: [customerCode],
+      orderBy: 'created_date DESC',
+    );
+
+    if (result.isEmpty) return [];
+
+    return result.map((json) => OrderModel.fromSqlite(json)).toList();
+  }
+
+  Future<void> deleteOrder(int orderId) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    await db.delete('sales_order', where: 'order_id = ?', whereArgs: [orderId]);
+  }
+
   Future<void> saveOrder(OrderModel order, List<CartItem> cartItems) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 

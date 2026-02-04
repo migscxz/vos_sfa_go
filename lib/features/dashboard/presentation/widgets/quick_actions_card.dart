@@ -4,6 +4,7 @@ import 'package:getwidget/getwidget.dart';
 import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_data_entry_page.dart';
 import 'package:vos_sfa_go/features/monitoring/presentation/monitoring_order_list_page.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
+import 'package:vos_sfa_go/features/orders/presentation/pages/pending_orders_page.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/customer_provider.dart';
@@ -62,6 +63,26 @@ class QuickActionsCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 14),
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.pending_actions_rounded,
+                  label: 'Pending',
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PendingOrdersPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
               Expanded(
                 child: _QuickActionButton(
                   icon: Icons.assignment_turned_in_rounded,

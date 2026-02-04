@@ -21,10 +21,16 @@ import 'widgets/modals/product_picker_modal.dart';
 import 'checkout_page.dart';
 
 class OrderFormPage extends ConsumerStatefulWidget {
-  const OrderFormPage({super.key, this.initialCustomer, this.initialType});
+  const OrderFormPage({
+    super.key,
+    this.initialCustomer,
+    this.initialType,
+    this.initialOrder,
+  });
 
   final Customer? initialCustomer;
   final OrderType? initialType;
+  final OrderModel? initialOrder;
 
   @override
   ConsumerState<OrderFormPage> createState() => _OrderFormPageState();
@@ -106,12 +112,32 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   void initState() {
     super.initState();
 
-    if (widget.initialCustomer != null) {
+    if (widget.initialOrder != null) {
+      final order = widget.initialOrder!;
+      _selectedCustomer = Customer(
+        id:
+            order.id ??
+            0, // ID might not be available or needed for UI display purposes here if we have name/code
+        name: order.customerName,
+        code: order.customerCode ?? '',
+      );
+      _customerNameCtrl.text = order.customerName;
+      _customerCodeCtrl.text = order.customerCode ?? '';
+      _poNumberCtrl.text = order.poNo ?? '';
+      _remarksCtrl.text = order.remarks ?? '';
+      _selectedSupplier = order.supplier;
+      _supplierCtrl.text = order.supplier ?? '';
+      _callsheetImagePath = order.callsheetImagePath;
+      // Note: Cart items will be loaded async
+    } else if (widget.initialCustomer != null) {
       _selectedCustomer = widget.initialCustomer;
       _customerNameCtrl.text = widget.initialCustomer!.name;
       _customerCodeCtrl.text = widget.initialCustomer!.code;
     }
-    _poNumberCtrl.text = '';
+
+    if (widget.initialOrder == null) {
+      _poNumberCtrl.text = '';
+    }
 
     // 🔹 Lock price type to logged-in salesman’s price_type
     final authState = ref.read(authProvider);
@@ -126,6 +152,92 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     }
 
     _loadMasterData();
+
+    if (widget.initialOrder != null) {
+      _loadOrderItems(widget.initialOrder!.orderId!);
+    }
+  }
+
+  Future<void> _loadOrderItems(int orderId) async {
+    try {
+      final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+      final rows = await db.query(
+        'sales_order_details',
+        where: 'order_id = ?',
+        whereArgs: [orderId],
+      );
+
+      final List<CartItem> loadedItems = [];
+
+      for (final row in rows) {
+        final productId = (row['product_id'] as num?)?.toInt();
+        if (productId == null) continue;
+
+        final quantity = (row['ordered_quantity'] as num?)?.toInt() ?? 1;
+        final unitPrice = (row['unit_price'] as num?)?.toDouble() ?? 0.0;
+
+        // Wait for products to be loaded if they aren't yet?
+        // Actually this runs in parallel with _loadMasterData.
+        // We should delay slightly or retry if _allProducts is empty.
+        // Simple retry loop:
+        int retries = 0;
+        while (_allProducts.isEmpty && retries < 5) {
+          await Future.delayed(const Duration(milliseconds: 300));
+          retries++;
+        }
+
+        String display = 'Product #$productId';
+        int? unitId;
+        double unitCount = 1.0;
+        String unitDisplay = 'PCS';
+        int baseId = productId;
+
+        try {
+          final product = _allProducts.firstWhere((p) => p.id == productId);
+          display = product.name;
+          unitId = product.unitId;
+          unitCount = product.uomCount;
+          unitDisplay = product.uom.isNotEmpty ? product.uom : 'PCS';
+          baseId = product.parentId ?? product.id;
+
+          if (unitCount > 1) {
+            final countText = (unitCount % 1 == 0)
+                ? unitCount.toInt().toString()
+                : unitCount.toString();
+            if (RegExp(r'\bPCS\b').hasMatch(unitDisplay.toUpperCase())) {
+              display = '$display ($countText PCS)';
+            } else {
+              display = '$display ($unitDisplay x$countText)';
+            }
+          } else {
+            display = '$display ($unitDisplay)';
+          }
+        } catch (_) {
+          // Not found
+        }
+
+        loadedItems.add(
+          CartItem(
+            productDisplay: display,
+            productId: productId,
+            productBaseId: baseId,
+            unitId: unitId,
+            unitCount: unitCount,
+            selectedUnitDisplay: unitDisplay,
+            quantity: quantity,
+            price: unitPrice,
+          ),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _cartItems.addAll(loadedItems);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading order items: $e');
+    }
   }
 
   @override
@@ -792,7 +904,14 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       context,
       MaterialPageRoute(
         builder: (context) => CheckoutPage(
-          orderTemplate: orderTemplate,
+          orderTemplate: orderTemplate.copyWith(
+            id: widget.initialOrder?.id, // Pass existing ID
+            orderId: widget.initialOrder?.orderId,
+            // Ensure IsSynced is reset if we are editing?
+            // Usually if editing an unsynced order, it stays unsynced.
+            // CheckoutPage/Repository should handle saving logic.
+            // But we should make sure we know we are EDITING.
+          ),
           initialItems: _cartItems,
         ),
       ),

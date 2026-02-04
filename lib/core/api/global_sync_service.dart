@@ -595,6 +595,9 @@ class GlobalSyncService {
           final filtered = _filterByColumns(sanitized, soColumns);
           if (filtered.isEmpty) continue;
 
+          // Mark as synced since it came from the server
+          filtered['is_synced'] = 1;
+
           batch.insert(
             'sales_order',
             filtered,
