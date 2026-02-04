@@ -1,13 +1,28 @@
-# TODO: Add Orders Feature Structure
+# Order Form Cleanup and Online-First Implementation
 
-## Tasks
+## Completed Tasks ✅
 
-- [x] Create application/order_controller.dart: A controller class to handle order business logic, interacting with repository and managing order state.
-- [x] Create data/models/cart_item_model.dart: A model for cart items, possibly extending or similar to OrderLineItem.
-- [x] Create data/repositories/order_repository.dart: Repository for order data operations, using DatabaseManager.
-- [x] Create presentation/widgets/order_item_card.dart: Widget to display individual order items in the cart.
-- [x] Create presentation/widgets/modals/customer_picker_modal.dart: Modal for customer selection (extract from order_form.dart).
-- [x] Create presentation/widgets/modals/supplier_picker_modal.dart: Modal for supplier selection (extract from order_form.dart).
-- [x] Create presentation/widgets/modals/product_multi_picker_modal.dart: Modal for multi-product selection (extract from order_form.dart).
-- [x] Update order_form.dart to use the new modal widgets instead of inline dialogs.
-- [x] Test integration and ensure no breaking changes.
+- [x] Remove embedded SupplierSearchDialog class and use existing SupplierPickerModal
+- [x] Remove embedded CustomerSearchDialog class and use existing CustomerPickerModal
+- [x] Remove embedded MultiSelectProductDialog class and use existing ProductMultiPickerModal
+- [x] Update method calls to use proper modal widgets
+- [x] Add necessary imports for modal widgets
+
+## Next Steps for Online-First Implementation
+
+- [ ] Modify data loading methods to prioritize API calls over local database
+- [ ] Simplify \_loadMasterData() to focus on API-first approach
+- [ ] Remove complex local DB seeding and fallback logic
+- [ ] Update customer loading to use API endpoints
+- [ ] Update supplier loading to use API endpoints
+- [ ] Update product loading to use API endpoints
+- [ ] Implement proper error handling for API failures
+- [ ] Add loading states for API calls
+- [ ] Test the online-first form functionality
+
+## Future: Offline-First Implementation
+
+- [ ] Implement offline data caching
+- [ ] Add sync mechanisms for offline/online transitions
+- [ ] Handle network connectivity changes
+- [ ] Implement conflict resolution for offline edits

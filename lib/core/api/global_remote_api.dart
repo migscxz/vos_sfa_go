@@ -16,9 +16,9 @@ class GlobalRemoteApi {
   /// 2) Custom:  { "rows": [ ... ] }
   /// 3) Mixed:   { "data": { "rows": [ ... ] } }
   Future<List<Map<String, dynamic>>> fetchList(
-      String endpoint, {
-        Map<String, String>? query,
-      }) async {
+    String endpoint, {
+    Map<String, String>? query,
+  }) async {
     final baseUri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
 
     final mergedQuery = <String, String>{
@@ -30,7 +30,10 @@ class GlobalRemoteApi {
 
     print('Fetching: $uri');
 
-    final response = await _client.get(uri);
+    final response = await _client.get(
+      uri,
+      headers: {'Authorization': 'Bearer AAKv73dkIV8DfAIA5vEt3eXVdIebzmBW'},
+    );
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -42,7 +45,9 @@ class GlobalRemoteApi {
 
     if (decodedAny is List) {
       // Some APIs return the list directly
-      return decodedAny.whereType<Map<String, dynamic>>().toList(growable: false);
+      return decodedAny.whereType<Map<String, dynamic>>().toList(
+        growable: false,
+      );
     }
 
     if (decodedAny is! Map<String, dynamic>) {
@@ -65,11 +70,42 @@ class GlobalRemoteApi {
     if (data is Map<String, dynamic>) {
       final innerRows = data['rows'];
       if (innerRows is List) {
-        return innerRows.whereType<Map<String, dynamic>>().toList(growable: false);
+        return innerRows.whereType<Map<String, dynamic>>().toList(
+          growable: false,
+        );
       }
     }
 
     return <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> post(
+    String endpoint,
+    Map<String, dynamic> data,
+  ) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    print('POSTing to: $uri');
+
+    final response = await _client.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer AAKv73dkIV8DfAIA5vEt3eXVdIebzmBW',
+      },
+      body: jsonEncode(data),
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic> && decoded.containsKey('data')) {
+        return decoded['data']; // Directus returns { data: { ... } }
+      }
+      return decoded;
+    } else {
+      throw Exception(
+        'Failed to POST $endpoint. Status: ${response.statusCode}. Body: ${response.body}',
+      );
+    }
   }
 
   void dispose() {

@@ -8,236 +8,17 @@ import 'package:vos_sfa_go/core/api/api_config.dart';
 import 'package:vos_sfa_go/core/api/global_remote_api.dart';
 import 'package:vos_sfa_go/core/database/database_manager.dart';
 import 'package:vos_sfa_go/features/orders/presentation/widgets/modals/customer_picker_modal.dart';
+import 'package:vos_sfa_go/features/orders/presentation/widgets/modals/supplier_picker_modal.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/customer_model.dart';
 import '../../../data/models/order_model.dart';
+import '../../../data/models/product_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../callsheet/presentation/callsheet_capture_page.dart';
 import '../data/models/cart_item_model.dart';
-
-class _ProductVariantMeta {
-  final int productId; // variant product_id
-  final int? baseId; // parent/base product_id (parent_id==null => baseId=productId)
-  final int? unitId;
-  final double unitCount;
-
-  const _ProductVariantMeta({
-    required this.productId,
-    required this.baseId,
-    required this.unitId,
-    required this.unitCount,
-  });
-}
-
-class SupplierSearchDialog extends StatefulWidget {
-  const SupplierSearchDialog({super.key, required this.suppliers});
-
-  final List<String> suppliers;
-
-  @override
-  State<SupplierSearchDialog> createState() => _SupplierSearchDialogState();
-}
-
-class _SupplierSearchDialogState extends State<SupplierSearchDialog> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  List<String> _filteredSuppliers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredSuppliers = widget.suppliers;
-    _searchCtrl.addListener(_filterSuppliers);
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _filterSuppliers() {
-    final query = _searchCtrl.text.toLowerCase().trim();
-    if (query.isEmpty) {
-      setState(() => _filteredSuppliers = widget.suppliers);
-    } else {
-      setState(() {
-        _filteredSuppliers = widget.suppliers.where((supplier) {
-          return supplier.toLowerCase().contains(query);
-        }).toList();
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Select Supplier'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Search suppliers...',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _filteredSuppliers.length,
-                itemBuilder: (context, index) {
-                  final supplier = _filteredSuppliers[index];
-                  return ListTile(
-                    title: Text(supplier),
-                    onTap: () => Navigator.of(context).pop(supplier),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-      ],
-    );
-  }
-}
-
-class MultiSelectProductDialog extends StatefulWidget {
-  const MultiSelectProductDialog({super.key, required this.products});
-
-  final List<String> products;
-
-  @override
-  State<MultiSelectProductDialog> createState() => _MultiSelectProductDialogState();
-}
-
-class _MultiSelectProductDialogState extends State<MultiSelectProductDialog> {
-  final Set<String> _selectedProducts = {};
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Select Products'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
-        child: ListView.builder(
-          itemCount: widget.products.length,
-          itemBuilder: (context, index) {
-            final product = widget.products[index];
-            final isSelected = _selectedProducts.contains(product);
-            return CheckboxListTile(
-              title: Text(product),
-              value: isSelected,
-              onChanged: (bool? value) {
-                setState(() {
-                  if (value == true) {
-                    _selectedProducts.add(product);
-                  } else {
-                    _selectedProducts.remove(product);
-                  }
-                });
-              },
-            );
-          },
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(_selectedProducts.toList()),
-          child: const Text('OK'),
-        ),
-      ],
-    );
-  }
-}
-
-class CustomerSearchDialog extends StatefulWidget {
-  const CustomerSearchDialog({super.key, required this.customers});
-
-  final List<Customer> customers;
-
-  @override
-  State<CustomerSearchDialog> createState() => _CustomerSearchDialogState();
-}
-
-class _CustomerSearchDialogState extends State<CustomerSearchDialog> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  List<Customer> _filteredCustomers = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredCustomers = widget.customers;
-    _searchCtrl.addListener(_filterCustomers);
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _filterCustomers() {
-    final query = _searchCtrl.text.toLowerCase().trim();
-    if (query.isEmpty) {
-      setState(() => _filteredCustomers = widget.customers);
-    } else {
-      setState(() {
-        _filteredCustomers = widget.customers.where((customer) {
-          return customer.name.toLowerCase().contains(query) ||
-              customer.code.toLowerCase().contains(query);
-        }).toList();
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Select Customer'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 400,
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Search customers...',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _filteredCustomers.length,
-                itemBuilder: (context, index) {
-                  final customer = _filteredCustomers[index];
-                  return ListTile(
-                    title: Text(customer.name),
-                    subtitle: Text(customer.code),
-                    onTap: () => Navigator.of(context).pop(customer),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-      ],
-    );
-  }
-}
+import 'widgets/modals/product_picker_modal.dart';
+import 'checkout_page.dart';
 
 class OrderFormPage extends ConsumerStatefulWidget {
   const OrderFormPage({
@@ -267,7 +48,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   Customer? _selectedCustomer;
   List<Customer> _customers = [];
   final List<Customer> _filteredCustomers = [];
-  final TextEditingController _customerSearchCtrl = TextEditingController();
+  // Supplier text controller (instead of dropdown value)
+  final TextEditingController _supplierCtrl = TextEditingController();
+
   final TextEditingController _poNumberCtrl = TextEditingController();
   final TextEditingController _remarksCtrl = TextEditingController();
   final TextEditingController _quantityCtrl = TextEditingController(text: '1');
@@ -280,33 +63,44 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   // Cart items for cart-style ordering
   final List<CartItem> _cartItems = [];
 
-  double get _grandTotal => _cartItems.fold(0.0, (sum, item) => sum + item.total);
+  double get _grandTotal =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.total);
 
   // === Supplier data from SQLite ===
   List<String> _suppliers = [];
   Map<String, String> _supplierShortcuts = {};
-  Map<String, int> _supplierIdByName = {};
-  Map<int, String> _supplierNameById = {};
+  Map<String, int> _supplierIdByName = {}; // Used for efficient lookup
 
   // === Units ===
   Map<int, String> _unitShortcutById = {};
   Map<int, String> _unitNameById = {};
 
-  // === Product dropdown source (display strings) ===
-  List<String> _allProducts = [];
-  Map<String, List<String>> _productsBySupplier = {};
+  // Products
+  List<Product> _allProducts = [];
+  Map<int, Set<int>> _productIdsBySupplierId = {};
 
-  // display -> product_id (variant)
-  Map<String, int> _productIdByDisplay = {};
-
-  // display -> full meta (variant/base/unit info)
-  Map<String, _ProductVariantMeta> _productMetaByDisplay = {};
-
-  List<String> get _currentProducts {
+  List<Product> get _currentProducts {
     if (_selectedSupplier == null) return _allProducts;
-    final list = _productsBySupplier[_selectedSupplier];
-    if (list == null || list.isEmpty) return _allProducts;
-    return list;
+
+    // Get supplier ID
+    final supplierId = _supplierIdByName[_selectedSupplier!];
+    if (supplierId == null) return _allProducts;
+
+    // Filter by supplier-product mapping if available
+    // (Note: The current DB structure has product_per_supplier table.
+    // We need to use that. In _loadProductsFromDb we can build a map of SupplierID -> List<ProductID>)
+
+    // Better approach: We have `_productIdsBySupplierName` or similar.
+    // Let's implement robust filtering in `_loadProductsFromDb` and store a map.
+    final allowedIds = _productIdsBySupplierId[supplierId];
+    if (allowedIds == null || allowedIds.isEmpty) {
+      // Fallback or empty?
+      // If strict: return [];
+      // If lenient: return _allProducts;
+      return [];
+    }
+
+    return _allProducts.where((p) => allowedIds.contains(p.id)).toList();
   }
 
   // This will be overridden by salesman.priceType (A/B/etc.) if available
@@ -344,6 +138,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     _poNumberCtrl.dispose();
     _remarksCtrl.dispose();
     _quantityCtrl.dispose();
+    _supplierCtrl.dispose();
     super.dispose();
   }
 
@@ -395,22 +190,28 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   }
 
   void _showSupplierSearchDialog() async {
-    final selectedSupplier = await showDialog<String>(
+    // Show new premium modal
+    await showDialog(
       context: context,
-      builder: (context) => SupplierSearchDialog(suppliers: _suppliers),
+      builder: (context) => SupplierPickerModal(
+        suppliers: _suppliers,
+        selectedSupplier: _selectedSupplier,
+        onSupplierSelected: (supplier) {
+          if (supplier != null) {
+            setState(() {
+              _selectedSupplier = supplier;
+              _supplierCtrl.text = supplier;
+              _selectedProduct = null;
+            });
+            _generatePoNumberForSupplier();
+          }
+        },
+      ),
     );
-
-    if (selectedSupplier != null) {
-      setState(() {
-        _selectedSupplier = selectedSupplier;
-        _selectedProduct = null;
-      });
-      _generatePoNumberForSupplier();
-    }
   }
 
   void _showCustomerSearchDialog() async {
-    final selectedCustomer = await showDialog<Customer>(
+    await showDialog(
       context: context,
       builder: (context) => CustomerPickerModal(
         customers: _customers,
@@ -428,65 +229,63 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     );
   }
 
-  void _showMultiSelectProductDialog() async {
+  void _showProductPicker() async {
     if (_selectedSupplier == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please select a supplier first')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a supplier first')),
+      );
       return;
     }
 
-    final selectedProducts = await showDialog<List<String>>(
+    await showDialog(
       context: context,
-      builder: (context) => MultiSelectProductDialog(products: _currentProducts),
+      builder: (context) => ProductPickerModal(
+        products: _currentProducts,
+        priceType: _selectedPriceType ?? 'Retail',
+        onProductsSelected: (selections) {
+          if (selections.isEmpty) return;
+
+          setState(() {
+            for (final sel in selections) {
+              final product = sel.product;
+              final qty = sel.quantity;
+              final price = product.getPrice(_selectedPriceType ?? 'Retail');
+
+              // Check if already in cart?
+              // For now, simpler to just add new line or update existing.
+              // Let's update if exists.
+              final existingIndex = _cartItems.indexWhere(
+                (item) => item.productId == product.id,
+              );
+
+              if (existingIndex >= 0) {
+                // Update existing
+                final existing = _cartItems[existingIndex];
+                _cartItems[existingIndex] = existing.copyWith(
+                  quantity: existing.quantity + qty,
+                );
+              } else {
+                // Add new
+                _cartItems.add(
+                  CartItem(
+                    productDisplay: product.name,
+                    productId: product.id,
+                    productBaseId: product.parentId ?? product.id,
+                    unitId: product.unitId,
+                    unitCount: product.uomCount,
+                    selectedUnitDisplay: product.uom.isNotEmpty
+                        ? product.uom
+                        : 'UNIT',
+                    quantity: qty,
+                    price: price,
+                  ),
+                );
+              }
+            }
+          });
+        },
+      ),
     );
-
-    if (selectedProducts != null && selectedProducts.isNotEmpty) {
-      setState(() {
-        for (final productDisplay in selectedProducts) {
-          final meta = _productMetaByDisplay[productDisplay];
-          if (meta != null) {
-            // Default to PCS variant if available, otherwise use the selected one
-            final defaultUnitDisplay = _getDefaultUnitForProduct(productDisplay);
-            _cartItems.add(
-              CartItem(
-                productDisplay: productDisplay,
-                productId: meta.productId,
-                productBaseId: meta.baseId,
-                unitId: meta.unitId,
-                unitCount: meta.unitCount,
-                selectedUnitDisplay: defaultUnitDisplay,
-                quantity: 1,
-                price: 1500.0, // Default price, should be calculated from product data
-              ),
-            );
-          }
-        }
-      });
-    }
-  }
-
-  List<String> _getAvailableUnitsForProduct(String productDisplay) {
-    // For simplicity, return all variants of the same base product
-    final meta = _productMetaByDisplay[productDisplay];
-    if (meta == null) return [productDisplay];
-
-    final baseId = meta.baseId ?? meta.productId;
-    return _productMetaByDisplay.entries
-        .where((e) => (e.value.baseId ?? e.value.productId) == baseId)
-        .map((e) => e.key)
-        .toList();
-  }
-
-  String _getDefaultUnitForProduct(String productDisplay) {
-    // Prefer PCS variant if available
-    final availableUnits = _getAvailableUnitsForProduct(productDisplay);
-    for (final unit in availableUnits) {
-      if (unit.contains('(PCS)') || unit.contains('PCS')) {
-        return unit;
-      }
-    }
-    return availableUnits.isNotEmpty ? availableUnits.first : productDisplay;
   }
 
   Future<void> _loadSuppliersFromDb() async {
@@ -494,13 +293,18 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     final rows = await db.query(
       'supplier',
-      columns: ['id', 'supplier_name', 'supplier_shortcut', 'supplier_type', 'isActive'],
+      columns: [
+        'id',
+        'supplier_name',
+        'supplier_shortcut',
+        'supplier_type',
+        'isActive',
+      ],
     );
 
     final List<String> names = [];
     final Map<String, String> shortcuts = {};
     final Map<String, int> idByName = {};
-    final Map<int, String> nameById = {};
 
     for (final row in rows) {
       final name = (row['supplier_name'] ?? '').toString();
@@ -521,7 +325,6 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
       names.add(name);
       idByName[name] = id;
-      nameById[id] = name;
 
       final shortcut = (row['supplier_shortcut'] ?? '').toString();
       if (shortcut.isNotEmpty) shortcuts[name] = shortcut;
@@ -533,7 +336,6 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       _suppliers = names;
       _supplierShortcuts = shortcuts;
       _supplierIdByName = idByName;
-      _supplierNameById = nameById;
     });
   }
 
@@ -541,13 +343,22 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   Future<void> _seedUnitsIfEmpty(Database dbSales) async {
     // If already has units, do nothing.
-    final existing = await dbSales.query('unit', columns: ['unit_id'], limit: 1);
+    final existing = await dbSales.query(
+      'unit',
+      columns: ['unit_id'],
+      limit: 1,
+    );
     if (existing.isNotEmpty) return;
 
-    debugPrint('[OrderForm] unit table is empty → seeding from API ${ApiConfig.units}');
+    debugPrint(
+      '[OrderForm] unit table is empty → seeding from API ${ApiConfig.units}',
+    );
 
     try {
-      final unitList = await _remoteApi.fetchList(ApiConfig.units, query: {'limit': '-1'});
+      final unitList = await _remoteApi.fetchList(
+        ApiConfig.units,
+        query: {'limit': '-1'},
+      );
       if (unitList.isEmpty) {
         debugPrint('[OrderForm] units API returned 0 rows; cannot seed.');
         return;
@@ -561,7 +372,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
         // Support either "unit_id" or "id"
         final unitIdRaw = m['unit_id'] ?? m['id'];
-        final unitId = (unitIdRaw is num) ? unitIdRaw.toInt() : int.tryParse('$unitIdRaw');
+        final unitId = (unitIdRaw is num)
+            ? unitIdRaw.toInt()
+            : int.tryParse('$unitIdRaw');
 
         if (unitId == null) continue;
 
@@ -589,7 +402,11 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   // -------- UOM HELPERS --------
 
-  String _uomLabelFromMaps(int? unitId, Map<int, String> shortcutById, Map<int, String> nameById) {
+  String _uomLabelFromMaps(
+    int? unitId,
+    Map<int, String> shortcutById,
+    Map<int, String> nameById,
+  ) {
     if (unitId == null) return 'UOM';
 
     final sc = shortcutById[unitId];
@@ -605,7 +422,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   String _uomFallbackFromText(String text) {
     final s = text.toLowerCase();
 
-    bool hasWord(String w) => RegExp(r'\b' + RegExp.escape(w) + r'\b').hasMatch(s);
+    bool hasWord(String w) =>
+        RegExp(r'\b' + RegExp.escape(w) + r'\b').hasMatch(s);
 
     if (hasWord('pcs') || hasWord('piece') || hasWord('pieces')) return 'PCS';
     if (hasWord('box') || hasWord('boxes')) return 'BOX';
@@ -645,7 +463,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       }
 
       // Prefer longest tokens first
-      final tokens = tokenToShortcut.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+      final tokens = tokenToShortcut.keys.toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
 
       for (final token in tokens) {
         if (d.endsWith(' $token') || d == token) {
@@ -658,21 +477,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     return _uomFallbackFromText(description);
   }
 
-  /// Fallback: infer count from strings like "X 24", "x24", or "15's"
-  double _inferCountFromText(String text) {
-    final s = text.toLowerCase();
-
-    final m1 = RegExp(r'\bx\s*(\d+(\.\d+)?)\b').firstMatch(s);
-    if (m1 != null) return double.tryParse(m1.group(1)!) ?? 1.0;
-
-    final m2 = RegExp(r"\b(\d+)\s*'s\b").firstMatch(s);
-    if (m2 != null) return double.tryParse(m2.group(1)!) ?? 1.0;
-
-    return 1.0;
-  }
-
   Future<void> _loadProductsFromDb() async {
-    final dbSales = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    final dbSales = await DatabaseManager().getDatabase(
+      DatabaseManager.dbSales,
+    );
 
     // 1) Ensure units exist locally (critical for correct labels)
     await _seedUnitsIfEmpty(dbSales);
@@ -703,20 +511,28 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     List<Map<String, Object?>> productRows = [];
     List<Map<String, Object?>> ppsRows = [];
 
-    try {
-      productRows = await dbSales.query(
-        'product',
-        columns: [
-          'product_id',
-          'product_name',
-          'description',
-          'parent_id',
-          'unit_of_measurement',
-          'unit_of_measurement_count',
-        ],
-      );
+    final columnsToFetch = [
+      'product_id',
+      'product_name',
+      'product_code',
+      'description',
+      'parent_id',
+      'unit_of_measurement',
+      'unit_of_measurement_count',
+      'price_per_unit',
+      'cost_per_unit',
+      'priceA',
+      'priceB',
+      'priceC',
+    ];
 
-      ppsRows = await dbSales.query('product_per_supplier', columns: ['product_id', 'supplier_id']);
+    try {
+      productRows = await dbSales.query('product', columns: columnsToFetch);
+
+      ppsRows = await dbSales.query(
+        'product_per_supplier',
+        columns: ['product_id', 'supplier_id'],
+      );
 
       debugPrint(
         '[OrderForm] Loaded from dbSales → products=${productRows.length}, pps=${ppsRows.length}, units=${unitRows.length}',
@@ -727,7 +543,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     // 4) Fallback to CUSTOMER DB if no products
     if (productRows.isEmpty) {
-      final dbCustomer = await DatabaseManager().getDatabase(DatabaseManager.dbCustomer);
+      final dbCustomer = await DatabaseManager().getDatabase(
+        DatabaseManager.dbCustomer,
+      );
 
       try {
         productRows = await dbCustomer.query(
@@ -755,188 +573,52 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       }
     }
 
-    // 5) Build base-name map using parent rows (parent_id == null)
-    final baseNameByBaseId = <int, String>{};
+    // Build Product Objects
+    final List<Product> loadedProducts = [];
 
     for (final row in productRows) {
-      final pid = (row['product_id'] as num?)?.toInt();
-      if (pid == null) continue;
-
-      final parentId = (row['parent_id'] as num?)?.toInt();
-      if (parentId == null) {
-        final name = (row['product_name'] ?? '').toString().trim();
-        if (name.isNotEmpty) baseNameByBaseId[pid] = name;
-      }
-    }
-
-    // ✅ productId -> baseId map (so we can include sibling variants)
-    final baseIdByProductId = <int, int>{};
-    for (final row in productRows) {
-      final pid = (row['product_id'] as num?)?.toInt();
-      if (pid == null) continue;
-      final parentId = (row['parent_id'] as num?)?.toInt();
-      baseIdByProductId[pid] = parentId ?? pid;
-    }
-
-    // 6) Build display labels per product_id (variants remain distinct)
-    final productIdByDisplay = <String, int>{};
-    final displayByProductId = <int, String>{};
-    final productMetaByDisplay = <String, _ProductVariantMeta>{};
-    final allDisplays = <String>[];
-
-    // baseId -> list of all variant displays
-    final displaysByBaseId = <int, List<String>>{};
-
-    for (final row in productRows) {
-      final pid = (row['product_id'] as num?)?.toInt();
-      if (pid == null) continue;
-
-      final parentId = (row['parent_id'] as num?)?.toInt();
-      final baseId = parentId ?? pid;
-
-      final baseName = baseNameByBaseId[baseId] ?? (row['product_name'] ?? '').toString().trim();
-      if (baseName.isEmpty) continue;
-
       final uomId = (row['unit_of_measurement'] as num?)?.toInt();
-      var count = (row['unit_of_measurement_count'] as num?)?.toDouble() ?? 1.0;
+      final desc = (row['description'] ?? '').toString();
+      final pname = (row['product_name'] ?? '').toString();
 
-      final desc = (row['description'] ?? '').toString().trim();
-      final pname = (row['product_name'] ?? '').toString().trim();
-
-      // ✅ UOM: prefer unit master; fallback to parsing text
+      // Infer UOM Label
       var uom = (uomId != null)
           ? _uomLabelFromMaps(uomId, unitShortcutById, unitNameById)
           : _uomLabelFromDescription(desc, unitShortcutById, unitNameById);
 
-      // If still generic, try product name too
       if (uom.toUpperCase() == 'UOM') {
         uom = _uomFallbackFromText('$pname $desc');
       }
 
-      // ✅ Count: prefer unit_of_measurement_count; fallback to parse text
-      if (count <= 1) {
-        final inferred1 = _inferCountFromText(pname);
-        if (inferred1 > 1) {
-          count = inferred1;
-        } else {
-          final inferred2 = _inferCountFromText(desc);
-          if (inferred2 > 1) count = inferred2;
-        }
-      }
-
-      // ✅ Salesman-friendly variant label:
-      // - If PCS and count>1 => "10 PCS" (not "PCS x10")
-      // - Otherwise count>1 => "BOX x10" (unit name is visible)
-      // - count<=1 => "PCS" or "BOX"
-      final uomUpper = uom.trim().toUpperCase();
-      final String variantLabel;
-      if (count > 1) {
-        final countText = (count % 1 == 0) ? count.toInt().toString() : count.toString();
-
-        if (RegExp(r'\bPCS\b').hasMatch(uomUpper)) {
-          variantLabel = '$countText PCS';
-        } else {
-          variantLabel = '$uom x$countText';
-        }
-      } else {
-        variantLabel = uom;
-      }
-
-      final display = '$baseName ($variantLabel)';
-
-      // Ensure display unique
-      var safeDisplay = display;
-      if (productIdByDisplay.containsKey(safeDisplay)) {
-        safeDisplay = '$display #$pid';
-      }
-
-      productIdByDisplay[safeDisplay] = pid;
-      displayByProductId[pid] = safeDisplay;
-
-      productMetaByDisplay[safeDisplay] = _ProductVariantMeta(
-        productId: pid,
-        baseId: baseId,
-        unitId: uomId,
-        unitCount: count,
-      );
-
-      allDisplays.add(safeDisplay);
-
-      displaysByBaseId.putIfAbsent(baseId, () => []);
-      displaysByBaseId[baseId]!.add(safeDisplay);
+      loadedProducts.add(Product.fromMap(row, uomLabel: uom));
     }
 
-    allDisplays.sort();
-    for (final e in displaysByBaseId.entries) {
-      e.value.sort();
-    }
+    loadedProducts.sort((a, b) => a.name.compareTo(b.name));
 
-    // 7) Build products per supplier using display labels
-    //
-    // ✅ FIX:
-    // If product_per_supplier maps only the base/PCS product_id, we still include
-    // ALL sibling variants (BOX/CASE/etc.) that share the same baseId.
-    final productsBySupplierSets = <String, Set<String>>{};
-
+    // Build Supplier Mapping
+    final Map<int, Set<int>> supplierMapping = {};
     for (final row in ppsRows) {
-      final productId = (row['product_id'] as num?)?.toInt();
-      final supplierId = (row['supplier_id'] as num?)?.toInt();
-      if (productId == null || supplierId == null) continue;
-
-      final supplierName = _supplierNameById[supplierId];
-      if (supplierName == null) continue;
-
-      final baseId = baseIdByProductId[productId] ?? productId;
-      final variantDisplays = displaysByBaseId[baseId];
-
-      productsBySupplierSets.putIfAbsent(supplierName, () => <String>{});
-
-      if (variantDisplays == null || variantDisplays.isEmpty) {
-        final direct = displayByProductId[productId];
-        if (direct != null) productsBySupplierSets[supplierName]!.add(direct);
-      } else {
-        productsBySupplierSets[supplierName]!.addAll(variantDisplays);
+      final pid = (row['product_id'] as num?)?.toInt();
+      final sid = (row['supplier_id'] as num?)?.toInt();
+      if (pid != null && sid != null) {
+        supplierMapping.putIfAbsent(sid, () => {}).add(pid);
       }
     }
 
-    final productsBySupplierName = <String, List<String>>{};
-    for (final e in productsBySupplierSets.entries) {
-      final list = e.value.toList()..sort();
-      productsBySupplierName[e.key] = list;
+    if (mounted) {
+      setState(() {
+        _unitShortcutById = unitShortcutById;
+        _unitNameById = unitNameById;
+        _allProducts = loadedProducts;
+        _productIdsBySupplierId = supplierMapping;
+      });
     }
-
-    // 8) If no mapping, fallback: allow all products for each supplier
-    if (productsBySupplierName.isEmpty && allDisplays.isNotEmpty) {
-      debugPrint(
-        '[OrderForm] No product_per_supplier mapping found. Fallback: all products for each supplier.',
-      );
-
-      for (final supplierName in _supplierNameById.values) {
-        productsBySupplierName[supplierName] = List<String>.from(allDisplays);
-      }
-    }
-
-    // 9) Update state
-    setState(() {
-      _unitShortcutById = unitShortcutById;
-      _unitNameById = unitNameById;
-
-      _productIdByDisplay = productIdByDisplay;
-      _productMetaByDisplay = productMetaByDisplay;
-
-      _allProducts = allDisplays;
-      _productsBySupplier = productsBySupplierName;
-    });
-
-    debugPrint(
-      '[OrderForm] _allProducts=${_allProducts.length}, suppliersWithMapping=${_productsBySupplier.length}',
-    );
   }
 
   Future<void> _openCallsheetCapture() async {
-    final result = await Navigator.of(
-      context,
-    ).push<String>(MaterialPageRoute(builder: (_) => const CallsheetCapturePage()));
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const CallsheetCapturePage()),
+    );
 
     if (result != null && mounted) {
       setState(() => _callsheetImagePath = result);
@@ -1053,10 +735,14 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         await db.execute('ALTER TABLE sales_order ADD COLUMN remarks TEXT');
       }
       if (!existingColumns.contains('salesman_id')) {
-        await db.execute('ALTER TABLE sales_order ADD COLUMN salesman_id INTEGER');
+        await db.execute(
+          'ALTER TABLE sales_order ADD COLUMN salesman_id INTEGER',
+        );
       }
       if (!existingColumns.contains('is_synced')) {
-        await db.execute('ALTER TABLE sales_order ADD COLUMN is_synced INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE sales_order ADD COLUMN is_synced INTEGER DEFAULT 0',
+        );
       }
     } catch (e) {
       debugPrint('Error migrating sales_order table: $e');
@@ -1067,21 +753,25 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please add at least one product to the cart')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one product to the cart'),
+        ),
+      );
       return;
     }
 
     final now = DateTime.now();
-    final supplierId = (_selectedSupplier != null) ? _supplierIdByName[_selectedSupplier!] : null;
+    final supplierId = (_selectedSupplier != null)
+        ? _supplierIdByName[_selectedSupplier!]
+        : null;
     final authState = ref.read(authProvider);
     final salesmanId = authState.salesman?.id ?? authState.user?.userId;
 
-    // Create order header
-    final order = OrderModel(
+    // Create order header template
+    final orderTemplate = OrderModel(
       orderNo: _poNumberCtrl.text.trim(),
-      poNo: _poNumberCtrl.text.trim(), // Using same for now, or add separate field if needed
+      poNo: _poNumberCtrl.text.trim(),
       customerName: _customerNameCtrl.text.trim(),
       customerCode: _customerCodeCtrl.text.trim(),
       salesmanId: salesmanId,
@@ -1089,7 +779,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       orderDate: now,
       createdAt: now,
       totalAmount: _grandTotal,
-      netAmount: _grandTotal, // Assuming no global discount for now
+      netAmount: _grandTotal,
       status: 'Pending',
       type: OrderType.manual,
       supplier: _selectedSupplier,
@@ -1099,115 +789,20 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       remarks: _remarksCtrl.text.trim(),
     );
 
-    try {
-      final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
-
-      // 1. Ensure tables exist
-      await _ensureSalesTablesExist(db);
-
-      // 2. Insert Header
-      final headerRow = order.toSqlite();
-      // Remove ID to let SQLite auto-increment
-      headerRow.remove('id');
-      // Remove fields not in table
-      headerRow.remove('customer_name');
-      headerRow.remove('supplier');
-      headerRow.remove('order_type');
-      headerRow.remove('product');
-      headerRow.remove('product_id');
-      headerRow.remove('product_base_id');
-      headerRow.remove('unit_id');
-      headerRow.remove('unit_count');
-      headerRow.remove('price_type');
-      headerRow.remove('quantity');
-      headerRow.remove('has_attachment');
-      headerRow.remove('callsheet_image_path');
-
-      final newOrderId = await db.insert(
-        'sales_order',
-        headerRow,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-
-      // 3. Insert Details
-      final batch = db.batch();
-      for (final item in _cartItems) {
-        batch.insert('sales_order_details', {
-          'order_id': newOrderId,
-          'product_id': item.productId,
-          'unit_price': item.price,
-          'ordered_quantity': item.quantity,
-          'gross_amount': item.total,
-          'net_amount': item.total, // Assuming no line discount
-          'created_date': now.toIso8601String(),
-          'remarks': '',
-        });
-      }
-      await batch.commit(noResult: true);
-
-      // 4. Update Provider State (Optional, for UI refresh)
-      // We create a copy with the new ID to add to the list
-      // ref.read(orderListProvider.notifier).addOrder(order);
-
-      final summary = StringBuffer()
-        ..writeln('Order Type: Manual')
-        ..writeln('Customer: ${order.customerName} (${order.customerCode})')
-        ..writeln('PO No: ${order.orderNo}')
-        ..writeln('Supplier: ${order.supplier}')
-        ..writeln('Price Type: ${order.priceType}')
-        ..writeln('Remarks: ${order.remarks}')
-        ..writeln('Items: ${_cartItems.length}')
-        ..writeln('Total: ₱${order.totalAmount.toStringAsFixed(2)}')
-        ..writeln('Attachment: ${order.hasAttachment ? "Yes" : "No"}')
-        ..writeln('')
-        ..writeln('Order Details:');
-
-      for (final item in _cartItems) {
-        summary.writeln(
-          '- ${item.productDisplay}: ${item.quantity} x ₱${item.price.toStringAsFixed(2)} = ₱${item.total.toStringAsFixed(2)}',
-        );
-      }
-
-      // Clear the form
-      setState(() {
-        _cartItems.clear();
-        _selectedSupplier = null;
-        _customerNameCtrl.clear();
-        _customerCodeCtrl.clear();
-        _poNumberCtrl.clear();
-        _remarksCtrl.clear();
-        _callsheetImagePath = null;
-      });
-
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(width: 12),
-              Text('Order Saved'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Text(summary.toString(), style: const TextStyle(fontSize: 14, height: 1.5)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('OK'),
-            ),
-          ],
+    // Navigate to Checkout Page
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutPage(
+          orderTemplate: orderTemplate,
+          initialItems: _cartItems,
         ),
-      );
-    } catch (e) {
-      debugPrint('Error saving order: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Error saving order. Please try again.')));
+      ),
+    );
+
+    // If checkout was successful (returns true), pop this page too
+    if (result == true && mounted) {
+      Navigator.pop(context);
     }
   }
 
@@ -1240,7 +835,11 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(title: const Text('Create New Order'), centerTitle: false, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Create New Order'),
+        centerTitle: false,
+        elevation: 0,
+      ),
       body: _isLoadingMasters
           ? const Center(
               child: Column(
@@ -1248,7 +847,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Loading data...', style: TextStyle(color: AppColors.textMuted)),
+                  Text(
+                    'Loading data...',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
                 ],
               ),
             )
@@ -1278,7 +880,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Customer Information', icon: Icons.person_outline),
+                            _buildSectionHeader(
+                              'Customer Information',
+                              icon: Icons.person_outline,
+                            ),
                             InkWell(
                               onTap: _showCustomerSearchDialog,
                               child: IgnorePointer(
@@ -1287,17 +892,27 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                   decoration: InputDecoration(
                                     labelText: 'Customer Name',
                                     hintText: 'Tap to search customers',
-                                    prefixIcon: const Icon(Icons.person, size: 20),
-                                    suffixIcon: const Icon(Icons.search, size: 20),
+                                    prefixIcon: const Icon(
+                                      Icons.person,
+                                      size: 20,
+                                    ),
+                                    suffixIcon: const Icon(
+                                      Icons.search,
+                                      size: 20,
+                                    ),
                                     filled: true,
                                     fillColor: Colors.grey[50],
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: AppColors.border),
+                                      borderSide: BorderSide(
+                                        color: AppColors.border,
+                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: AppColors.border),
+                                      borderSide: BorderSide(
+                                        color: AppColors.border,
+                                      ),
                                     ),
                                   ),
                                   validator: (val) {
@@ -1320,11 +935,15 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                 fillColor: Colors.grey[50],
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1352,22 +971,30 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionHeader('Sales Order', icon: Icons.receipt_long),
+                            _buildSectionHeader(
+                              'Sales Order',
+                              icon: Icons.receipt_long,
+                            ),
                             TextFormField(
                               controller: _poNumberCtrl,
                               decoration: InputDecoration(
                                 labelText: 'SO Number',
-                                hintText: 'Auto-generated after supplier selection',
+                                hintText:
+                                    'Auto-generated after supplier selection',
                                 prefixIcon: const Icon(Icons.numbers, size: 20),
                                 filled: true,
                                 fillColor: Colors.grey[100],
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                               ),
                               readOnly: true,
@@ -1392,11 +1019,15 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                 fillColor: Colors.grey[100],
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                                  borderSide: BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                               ),
                               maxLines: 3,
@@ -1455,6 +1086,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
+                                        color: Colors.black,
                                       ),
                                     ),
                                     backgroundColor: Colors.grey[100],
@@ -1463,69 +1095,66 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                               ),
                             ),
 
-                            // Supplier Selection
-                            DropdownButtonFormField<String>(
-                              initialValue:
-                                  (_selectedSupplier != null &&
-                                      _suppliers.contains(_selectedSupplier))
-                                  ? _selectedSupplier
-                                  : null,
-                              decoration: InputDecoration(
-                                labelText: 'Supplier',
-                                hintText: 'Select supplier',
-                                prefixIcon: const Icon(Icons.storefront, size: 20),
-                                filled: true,
-                                fillColor: Colors.grey[50],
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.border),
+                            // Supplier Selection (Text Field)
+                            InkWell(
+                              onTap: _showSupplierSearchDialog,
+                              child: IgnorePointer(
+                                child: TextFormField(
+                                  controller: _supplierCtrl,
+                                  decoration: InputDecoration(
+                                    labelText: 'Supplier',
+                                    hintText: 'Tap to select supplier',
+                                    prefixIcon: const Icon(
+                                      Icons.storefront,
+                                      size: 20,
+                                    ),
+                                    suffixIcon: const Icon(
+                                      Icons.arrow_drop_down,
+                                      size: 24,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[50],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: AppColors.border,
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: AppColors.border,
+                                      ),
+                                    ),
+                                  ),
+                                  validator: (val) {
+                                    if (val == null || val.trim().isEmpty) {
+                                      return 'Supplier is required';
+                                    }
+                                    return null;
+                                  },
                                 ),
                               ),
-                              items: _suppliers
-                                  .map(
-                                    (s) => DropdownMenuItem<String>(
-                                      value: s,
-                                      child: Text(s, overflow: TextOverflow.ellipsis),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedSupplier = val;
-                                  _selectedProduct = null;
-                                });
-                                _generatePoNumberForSupplier();
-                              },
-                              validator: (val) {
-                                if (val == null || val.trim().isEmpty)
-                                  return 'Supplier is required';
-                                return null;
-                              },
                             ),
 
                             const SizedBox(height: 16),
 
                             // Add Products Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: ElevatedButton.icon(
-                                onPressed: _showMultiSelectProductDialog,
+                            Center(
+                              child: OutlinedButton.icon(
+                                onPressed: _showProductPicker,
                                 icon: const Icon(Icons.add_shopping_cart),
                                 label: const Text('Add Products'),
-                                style: ElevatedButton.styleFrom(
-                                  elevation: 1,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  side: BorderSide(color: AppColors.primary),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
                                   ),
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 16),
 
                             // Cart Items List
@@ -1541,7 +1170,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -1555,7 +1185,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                                 ),
                                               ),
                                               IconButton(
-                                                icon: const Icon(Icons.delete, color: Colors.red),
+                                                icon: const Icon(
+                                                  Icons.delete,
+                                                  color: Colors.red,
+                                                ),
                                                 onPressed: () {
                                                   setState(() {
                                                     _cartItems.removeAt(index);
@@ -1568,57 +1201,59 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                           Row(
                                             children: [
                                               Expanded(
-                                                child: DropdownButtonFormField<String>(
-                                                  initialValue: item.selectedUnitDisplay,
-                                                  decoration: InputDecoration(
-                                                    labelText: 'Unit/Packaging',
-                                                    filled: true,
-                                                    fillColor: Colors.grey[50],
-                                                    border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(6),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 12,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey[100],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.grey[300]!,
                                                     ),
                                                   ),
-                                                  items:
-                                                      _getAvailableUnitsForProduct(
-                                                            item.productDisplay,
-                                                          )
-                                                          .map(
-                                                            (unit) => DropdownMenuItem(
-                                                              value: unit,
-                                                              child: Text(unit),
-                                                            ),
-                                                          )
-                                                          .toList(),
-                                                  onChanged: (value) {
-                                                    if (value != null) {
-                                                      setState(() {
-                                                        _cartItems[index] = item.copyWith(
-                                                          selectedUnitDisplay: value,
-                                                        );
-                                                      });
-                                                    }
-                                                  },
+                                                  child: Text(
+                                                    item.selectedUnitDisplay,
+                                                    style: TextStyle(
+                                                      color: Colors.grey[700],
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: TextFormField(
-                                                  initialValue: item.quantity.toString(),
-                                                  keyboardType: TextInputType.number,
+                                                  initialValue: item.quantity
+                                                      .toString(),
+                                                  keyboardType:
+                                                      TextInputType.number,
                                                   decoration: InputDecoration(
                                                     labelText: 'Quantity',
                                                     filled: true,
                                                     fillColor: Colors.grey[50],
                                                     border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(6),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
                                                     ),
                                                   ),
                                                   onChanged: (value) {
-                                                    final qty = int.tryParse(value) ?? 1;
+                                                    final qty =
+                                                        int.tryParse(value) ??
+                                                        1;
                                                     setState(() {
-                                                      _cartItems[index] = item.copyWith(
-                                                        quantity: qty,
-                                                      );
+                                                      _cartItems[index] = item
+                                                          .copyWith(
+                                                            quantity: qty,
+                                                          );
                                                     });
                                                   },
                                                 ),
@@ -1647,11 +1282,15 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     const Text(
                                       'Grand Total:',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     Text(
                                       '₱${_grandTotal.toStringAsFixed(2)}',
@@ -1690,11 +1329,16 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                           icon: const Icon(Icons.save_outlined),
                           label: const Text(
                             'Save Order',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),

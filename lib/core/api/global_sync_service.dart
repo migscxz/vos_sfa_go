@@ -66,6 +66,9 @@ class GlobalSyncService {
         },
       );
     } else {
+      // ✅ UPLOAD PENDING ORDERS FIRST
+      await _syncPendingOrders(salesmanId);
+
       await _syncSalesForSalesman(salesmanId);
     }
 
@@ -114,7 +117,7 @@ class GlobalSyncService {
           if (columns.isEmpty) {
             print(
               'WARNING: PRAGMA returned 0 columns for $dbName::$tableName. '
-                  'Skipping inserts to avoid unknown-column crashes.',
+              'Skipping inserts to avoid unknown-column crashes.',
             );
             continue;
           }
@@ -141,6 +144,157 @@ class GlobalSyncService {
 
       await batch.commit(noResult: true);
     });
+  }
+
+  /// Uploads pending orders (is_synced=0) from local DB to server.
+  Future<void> _syncPendingOrders(int salesmanId) async {
+    print('Starting upload of pending orders for salesman: $salesmanId');
+    final db = await _dbManager.getDatabase(DatabaseManager.dbSales);
+
+    try {
+      // 1. Get unsynced orders
+      final pendingOrders = await db.query(
+        'sales_order',
+        where: 'is_synced = 0 AND salesman_id = ?',
+        whereArgs: [salesmanId],
+      );
+
+      if (pendingOrders.isEmpty) {
+        print('No pending orders to upload.');
+        return;
+      }
+
+      print('Found ${pendingOrders.length} pending orders to upload.');
+
+      for (final orderRaw in pendingOrders) {
+        final localId = orderRaw['order_id']; // This is the SQLite auto-inc ID
+        if (localId == null) continue;
+
+        // Check if order_no exists on server to prevent "Unique" error
+        final orderNo = orderRaw['order_no'];
+        if (orderNo != null && orderNo.toString().isNotEmpty) {
+          try {
+            final existing = await _api.fetchList(
+              ApiConfig.salesOrder,
+              query: {'filter[order_no][_eq]': orderNo.toString()},
+            );
+            if (existing.isNotEmpty) {
+              print(
+                'Order $orderNo already exists on server. Skipping upload.',
+              );
+              // Mark as synced so we don't try again
+              await db.update(
+                'sales_order',
+                {'is_synced': 1},
+                where: 'order_id = ?',
+                whereArgs: [localId],
+              );
+              continue;
+            }
+          } catch (e) {
+            print('Error checking existence of order $orderNo: $e');
+            // If check fails, we might still try to upload or skip?
+            // Safer to skip if we can't verify uniqueness, or rely on POST error.
+            // Let's try to proceed to POST, if it fails it fails.
+          }
+        }
+
+        // Prepare Header Payload
+        final headerPayload = Map<String, dynamic>.from(orderRaw);
+        // Remove local-only fields
+        headerPayload.remove('order_id'); // Don't send local ID to server
+        headerPayload.remove('is_synced');
+        headerPayload.remove('customer_name');
+        headerPayload.remove('supplier');
+        headerPayload.remove('order_type');
+        headerPayload.remove('product');
+        headerPayload.remove('product_id');
+        headerPayload.remove('product_base_id');
+        headerPayload.remove('unit_id');
+        headerPayload.remove('unit_count');
+        headerPayload.remove('price_type');
+        headerPayload.remove('quantity');
+        headerPayload.remove('has_attachment');
+        headerPayload.remove('callsheet_image_path');
+
+        // ✅ Inject Defaults for Server Required Fields
+        if (headerPayload['allocated_amount'] == null) {
+          // Default to total_amount if available, else 0.0
+          headerPayload['allocated_amount'] =
+              headerPayload['total_amount'] ?? 0.0;
+        }
+        if (headerPayload['sales_type'] == null) {
+          headerPayload['sales_type'] = 1; // Default Sales Type
+        }
+        if (headerPayload['receipt_type'] == null) {
+          headerPayload['receipt_type'] = 1; // Default Receipt Type
+        }
+        if (headerPayload['discount_amount'] == null) {
+          headerPayload['discount_amount'] = 0.0;
+        }
+
+        // Remove keys with null values (Directus/API best practice)
+        headerPayload.removeWhere((key, value) => value == null);
+
+        // Sanitize first
+        final cleanHeader = _sanitizeForSqlite(headerPayload);
+
+        // Debug: Print the payload to verify allocated_amount is there
+        print('Uploading Order Header Payload: $cleanHeader');
+
+        try {
+          // POST Header
+          final serverResponse = await _api.post(
+            ApiConfig.salesOrder,
+            cleanHeader,
+          );
+
+          final serverOrderId =
+              serverResponse['order_id'] ?? serverResponse['id'];
+
+          if (serverOrderId != null) {
+            print('Uploaded Order $localId -> Server ID: $serverOrderId');
+
+            // 2. Get Details
+            final details = await db.query(
+              'sales_order_details',
+              where: 'order_id = ?',
+              whereArgs: [localId],
+            );
+
+            for (final detailRaw in details) {
+              final detailPayload = Map<String, dynamic>.from(detailRaw);
+              detailPayload.remove('detail_id'); // Local ID
+              detailPayload['order_id'] =
+                  serverOrderId; // Link to new Server ID
+
+              // Remove calculated/UI fields if server calculates them
+              // detailPayload.remove('created_date');
+              // detailPayload.remove('modified_date');
+
+              // Sanitize
+              final cleanDetail = _sanitizeForSqlite(detailPayload);
+
+              // POST Detail
+              await _api.post(ApiConfig.salesOrderDetails, cleanDetail);
+            }
+
+            // Mark local as synced
+            await db.update(
+              'sales_order',
+              {'is_synced': 1},
+              where: 'order_id = ?',
+              whereArgs: [localId],
+            );
+          }
+        } catch (e) {
+          print('Failed to upload order $localId: $e');
+          // Start next order without crashing
+        }
+      }
+    } catch (e) {
+      print('Error in _syncPendingOrders: $e');
+    }
   }
 
   /// Special sync for CUSTOMERS filtered by [salesmanId].
@@ -170,10 +324,7 @@ class GlobalSyncService {
         // 1) customer_salesman mapping filtered by salesman
         final mappingList = await _api.fetchList(
           ApiConfig.customerSalesmen,
-          query: {
-            'filter[salesman_id][_eq]': '$salesmanId',
-            'limit': '-1',
-          },
+          query: {'filter[salesman_id][_eq]': '$salesmanId', 'limit': '-1'},
         );
 
         batch.delete('customer_salesman');
@@ -207,10 +358,7 @@ class GlobalSyncService {
         if (customerIds.isNotEmpty) {
           final customers = await _api.fetchList(
             ApiConfig.customer,
-            query: {
-              'filter[id][_in]': customerIds.join(','),
-              'limit': '-1',
-            },
+            query: {'filter[id][_in]': customerIds.join(','), 'limit': '-1'},
           );
 
           for (final c in customers) {
@@ -227,9 +375,13 @@ class GlobalSyncService {
             );
           }
 
-          print('Synced customer for salesman $salesmanId: ${customers.length} records.');
+          print(
+            'Synced customer for salesman $salesmanId: ${customers.length} records.',
+          );
         } else {
-          print('No mapped customers for salesman $salesmanId → local customer table will be empty.');
+          print(
+            'No mapped customers for salesman $salesmanId → local customer table will be empty.',
+          );
         }
 
         // 3) suppliers global
@@ -350,7 +502,10 @@ class GlobalSyncService {
           batch.delete('unit');
 
           for (final item in units) {
-            final normalized = _normalizeForTable('unit', item); // "order"→"sort_order"
+            final normalized = _normalizeForTable(
+              'unit',
+              item,
+            ); // "order"→"sort_order"
             final sanitized = _sanitizeForSqlite(normalized);
             final filtered = _filterByColumns(sanitized, uColumns);
             if (filtered.isEmpty) continue;
@@ -389,7 +544,9 @@ class GlobalSyncService {
             );
           }
 
-          print('Synced product_per_supplier (global): ${ppsList.length} records.');
+          print(
+            'Synced product_per_supplier (global): ${ppsList.length} records.',
+          );
         } catch (e) {
           print('Error syncing product_per_supplier: $e');
         }
@@ -397,10 +554,7 @@ class GlobalSyncService {
         // 2) sales_order filtered by salesman
         final salesOrders = await _api.fetchList(
           ApiConfig.salesOrder,
-          query: {
-            'filter[salesman_id][_eq]': '$salesmanId',
-            'limit': '-1',
-          },
+          query: {'filter[salesman_id][_eq]': '$salesmanId', 'limit': '-1'},
         );
 
         batch.delete('sales_order');
@@ -418,7 +572,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_order for salesman $salesmanId: ${salesOrders.length} records.');
+        print(
+          'Synced sales_order for salesman $salesmanId: ${salesOrders.length} records.',
+        );
 
         final Set<String> soOrderIds = {};
         for (final o in salesOrders) {
@@ -429,10 +585,7 @@ class GlobalSyncService {
         // 3) sales_invoice filtered by salesman
         final invoices = await _api.fetchList(
           ApiConfig.salesInvoice,
-          query: {
-            'filter[salesman_id][_eq]': '$salesmanId',
-            'limit': '-1',
-          },
+          query: {'filter[salesman_id][_eq]': '$salesmanId', 'limit': '-1'},
         );
 
         batch.delete('sales_invoice');
@@ -450,7 +603,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_invoice for salesman $salesmanId: ${invoices.length} records.');
+        print(
+          'Synced sales_invoice for salesman $salesmanId: ${invoices.length} records.',
+        );
 
         final Set<String> siOrderIds = {};
         for (final inv in invoices) {
@@ -461,10 +616,7 @@ class GlobalSyncService {
         // 4) sales_return filtered by salesman
         final returns = await _api.fetchList(
           ApiConfig.salesReturn,
-          query: {
-            'filter[salesman_id][_eq]': '$salesmanId',
-            'limit': '-1',
-          },
+          query: {'filter[salesman_id][_eq]': '$salesmanId', 'limit': '-1'},
         );
 
         batch.delete('sales_return');
@@ -482,7 +634,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_return for salesman $salesmanId: ${returns.length} records.');
+        print(
+          'Synced sales_return for salesman $salesmanId: ${returns.length} records.',
+        );
 
         final Set<String> returnNos = {};
         for (final r in returns) {
@@ -512,7 +666,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_order_details (filtered): ${soDetails.length} records.');
+        print(
+          'Synced sales_order_details (filtered): ${soDetails.length} records.',
+        );
 
         final siDetails = await _fetchDetailsForIds(
           endpoint: ApiConfig.salesInvoiceDetails,
@@ -535,7 +691,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_invoice_details (filtered): ${siDetails.length} records.');
+        print(
+          'Synced sales_invoice_details (filtered): ${siDetails.length} records.',
+        );
 
         final srDetails = await _fetchDetailsForIds(
           endpoint: ApiConfig.salesReturnDetails,
@@ -558,7 +716,9 @@ class GlobalSyncService {
           );
         }
 
-        print('Synced sales_return_details (filtered): ${srDetails.length} records.');
+        print(
+          'Synced sales_return_details (filtered): ${srDetails.length} records.',
+        );
       } catch (e) {
         print('Error syncing sales module for salesman $salesmanId: $e');
       }
@@ -615,7 +775,9 @@ class GlobalSyncService {
     if (cached != null && cached.isNotEmpty) return cached;
 
     // Try without quotes first, then with quotes
-    List<Map<String, Object?>> rows = await executor.rawQuery('PRAGMA table_info($tableName)');
+    List<Map<String, Object?>> rows = await executor.rawQuery(
+      'PRAGMA table_info($tableName)',
+    );
     if (rows.isEmpty) {
       rows = await executor.rawQuery('PRAGMA table_info("$tableName")');
     }
@@ -631,9 +793,9 @@ class GlobalSyncService {
   }
 
   Map<String, dynamic> _filterByColumns(
-      Map<String, dynamic> row,
-      Set<String> allowedCols,
-      ) {
+    Map<String, dynamic> row,
+    Set<String> allowedCols,
+  ) {
     // STRICT MODE: if we don't know table columns, don't insert anything.
     if (allowedCols.isEmpty) return <String, dynamic>{};
 
@@ -647,9 +809,9 @@ class GlobalSyncService {
   // --- TABLE-SPECIFIC NORMALIZATION (key remaps + hard drops) ---
 
   Map<String, dynamic> _normalizeForTable(
-      String tableName,
-      Map<String, dynamic> json,
-      ) {
+    String tableName,
+    Map<String, dynamic> json,
+  ) {
     final m = Map<String, dynamic>.from(json);
 
     void renameKey(String from, String to) {
@@ -706,7 +868,9 @@ class GlobalSyncService {
         clean[key] = null;
       } else if (value is bool) {
         clean[key] = value ? 1 : 0;
-      } else if (value is Map && value['type'] == 'Buffer' && value['data'] is List) {
+      } else if (value is Map &&
+          value['type'] == 'Buffer' &&
+          value['data'] is List) {
         // Directus Buffer → store first byte as int
         final list = value['data'] as List;
         clean[key] = list.isNotEmpty ? list[0] : 0;
