@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:getwidget/getwidget.dart';
-import '../../../../core/theme/app_colors.dart';
-import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_data_entry_page.dart';
 import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_capture_page.dart';
+import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_data_entry_page.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
+
+import '../../../../core/theme/app_colors.dart';
 
 class QuickActionsCard extends StatelessWidget {
   final bool isTablet;
@@ -26,11 +27,7 @@ class QuickActionsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.bolt_rounded,
-                color: AppColors.textDark,
-                size: 24,
-              ),
+              Icon(Icons.bolt_rounded, color: AppColors.textDark, size: 24),
               const SizedBox(width: 12),
               Text(
                 'Bookings',
@@ -52,9 +49,9 @@ class QuickActionsCard extends StatelessWidget {
                   label: 'Encoding',
                   color: const Color(0xFF3B82F6),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const OrderFormPage()),
-                    );
+                    Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => const OrderFormPage()));
                   },
                 ),
               ),
@@ -65,9 +62,9 @@ class QuickActionsCard extends StatelessWidget {
                   label: 'Take Photo',
                   color: const Color(0xFF10B981),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CallsheetCapturePage()),
-                    );
+                    Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => const CallsheetCapturePage()));
                   },
                 ),
               ),
@@ -78,9 +75,9 @@ class QuickActionsCard extends StatelessWidget {
                   label: 'Printables',
                   color: const Color(0xFFF59E0B),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CallsheetDataEntryPage()),
-                    );
+                    Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => const CallsheetDataEntryPage()));
                   },
                 ),
               ),

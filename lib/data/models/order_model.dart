@@ -15,19 +15,29 @@ extension OrderTypeDb on OrderType {
 
 class OrderModel {
   final int? id; // Local/SQLite ID (if you store to your own table)
+  final int? orderId; // Server ID (from API)
 
   // Business fields
-  final String orderNo; // PO Number
+  final String orderNo; // System SO Number
+  final String? poNo; // Customer PO Number
   final String customerName;
   final String? customerCode;
+  final int? salesmanId;
+  final int? supplierId;
+  final DateTime orderDate;
+  final String? deliveryDate;
+  final String? paymentTerms;
+  final String? remarks;
   final DateTime createdAt;
   final double totalAmount;
+  final double? discountAmount;
+  final double netAmount;
   final String status;
+  final int isSynced; // 0 = false, 1 = true
 
   // UI fields
   final OrderType type;
-  final String? supplier; // display name (optional)
-  final int? supplierId; // optional (recommended if you will post later)
+  final String? supplier; // display name
 
   /// IMPORTANT:
   /// This should now store the DISPLAY string (variant) from dropdown,
@@ -58,16 +68,26 @@ class OrderModel {
 
   OrderModel({
     this.id,
+    this.orderId,
     required this.orderNo,
+    this.poNo,
     required this.customerName,
     this.customerCode,
+    this.salesmanId,
+    this.supplierId,
+    required this.orderDate,
+    this.deliveryDate,
+    this.paymentTerms,
+    this.remarks,
     required this.createdAt,
     required this.totalAmount,
+    this.discountAmount,
+    required this.netAmount,
     required this.status,
+    this.isSynced = 0,
 
     this.type = OrderType.manual,
     this.supplier,
-    this.supplierId,
 
     this.product,
     this.productId,
@@ -90,13 +110,21 @@ class OrderModel {
   factory OrderModel.fromSqlite(Map<String, dynamic> map) {
     return OrderModel(
       id: (map['id'] as num?)?.toInt() ?? (map['order_id'] as num?)?.toInt(),
+      orderId: (map['order_id'] as num?)?.toInt(), // Server ID if present
 
       orderNo: (map['order_no'] ?? '').toString(),
+      poNo: map['po_no']?.toString(),
 
       // Prefer explicit name if present; otherwise fallback to code.
       customerName: (map['customer_name'] ?? map['customer_code'] ?? 'Unknown').toString(),
-
       customerCode: map['customer_code']?.toString(),
+      salesmanId: (map['salesman_id'] as num?)?.toInt(),
+      supplierId: (map['supplier_id'] as num?)?.toInt(),
+
+      orderDate: DateTime.tryParse((map['order_date'] ?? '').toString()) ?? DateTime.now(),
+      deliveryDate: map['delivery_date']?.toString(),
+      paymentTerms: map['payment_terms']?.toString(),
+      remarks: map['remarks']?.toString(),
 
       createdAt:
           DateTime.tryParse((map['created_date'] ?? map['created_at'] ?? '').toString()) ??
@@ -106,13 +134,15 @@ class OrderModel {
           (map['total_amount'] as num?)?.toDouble() ??
           (map['net_amount'] as num?)?.toDouble() ??
           0.0,
+      discountAmount: (map['discount_amount'] as num?)?.toDouble(),
+      netAmount: (map['net_amount'] as num?)?.toDouble() ?? 0.0,
 
       status: (map['order_status'] ?? map['status'] ?? 'Pending').toString(),
+      isSynced: (map['is_synced'] as num?)?.toInt() ?? 0,
 
       type: OrderTypeDb.fromDb(map['order_type']?.toString()),
 
       supplier: map['supplier']?.toString(),
-      supplierId: (map['supplier_id'] as num?)?.toInt(),
 
       product: map['product']?.toString(),
       productId: (map['product_id'] as num?)?.toInt(),
@@ -133,20 +163,30 @@ class OrderModel {
   // For best practice, store UI orders to a separate local table (recommended).
   Map<String, dynamic> toSqlite() {
     return {
-      'id': id,
+      // 'id': id, // Auto-increment, usually don't insert explicitly unless syncing
+      'order_id': orderId,
 
       'order_no': orderNo,
+      'po_no': poNo,
       'customer_name': customerName,
       'customer_code': customerCode,
+      'salesman_id': salesmanId,
+      'supplier_id': supplierId,
+      'order_date': orderDate.toIso8601String().split('T')[0], // YYYY-MM-DD
+      'delivery_date': deliveryDate,
+      'payment_terms': paymentTerms,
+      'remarks': remarks,
 
       'created_date': createdAt.toIso8601String(),
       'total_amount': totalAmount,
+      'discount_amount': discountAmount,
+      'net_amount': netAmount,
       'order_status': status,
+      'is_synced': isSynced,
 
       'order_type': type.dbValue,
 
       'supplier': supplier,
-      'supplier_id': supplierId,
 
       'product': product,
       'product_id': productId,

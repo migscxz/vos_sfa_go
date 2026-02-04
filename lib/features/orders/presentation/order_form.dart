@@ -13,7 +13,6 @@ import '../../../data/models/customer_model.dart';
 import '../../../data/models/order_line_item.dart';
 import '../../../data/models/order_model.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../providers/order_providers.dart';
 import '../../callsheet/presentation/callsheet_capture_page.dart';
 
 class _ProductVariantMeta {
@@ -269,6 +268,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   final List<Customer> _filteredCustomers = [];
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final TextEditingController _poNumberCtrl = TextEditingController();
+  final TextEditingController _remarksCtrl = TextEditingController();
   final TextEditingController _quantityCtrl = TextEditingController(text: '1');
 
   String? _selectedSupplier;
@@ -341,6 +341,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     _customerNameCtrl.dispose();
     _customerCodeCtrl.dispose();
     _poNumberCtrl.dispose();
+    _remarksCtrl.dispose();
     _quantityCtrl.dispose();
     super.dispose();
   }
@@ -953,6 +954,110 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     });
   }
 
+  /// Ensures the local sales tables exist before saving.
+  Future<void> _ensureSalesTablesExist(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sales_order (
+        order_id INTEGER PRIMARY KEY,
+        order_no TEXT,
+        po_no TEXT,
+        customer_code TEXT,
+        salesman_id INTEGER,
+        supplier_id INTEGER,
+        branch_id INTEGER,
+        order_date TEXT,
+        delivery_date TEXT,
+        due_date TEXT,
+        payment_terms TEXT,
+        order_status TEXT,
+        total_amount REAL,
+        allocated_amount REAL,
+        sales_type TEXT,
+        receipt_type TEXT,
+        discount_amount REAL,
+        net_amount REAL,
+        created_by INTEGER,
+        created_date TEXT,
+        modified_by INTEGER,
+        modified_date TEXT,
+        posted_by INTEGER,
+        posted_date TEXT,
+        remarks TEXT,
+        isDelivered INTEGER,
+        isCancelled INTEGER,
+        for_approval_at TEXT,
+        for_consolidation_at TEXT,
+        for_picking_at TEXT,
+        for_invoicing_at TEXT,
+        for_loading_at TEXT,
+        for_shipping_at TEXT,
+        delivered_at TEXT,
+        on_hold_at TEXT,
+        cancelled_at TEXT,
+
+        -- Extra UI columns for offline functionality
+        customer_name TEXT,
+        is_synced INTEGER DEFAULT 0,
+        order_type TEXT,
+        supplier TEXT,
+        product TEXT,
+        product_id INTEGER,
+        product_base_id INTEGER,
+        unit_id INTEGER,
+        unit_count REAL,
+        price_type TEXT,
+        quantity INTEGER,
+        has_attachment INTEGER,
+        callsheet_image_path TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sales_order_details (
+        detail_id INTEGER PRIMARY KEY,
+        product_id INTEGER,
+        order_id INTEGER,
+        unit_price REAL,
+        ordered_quantity INTEGER,
+        allocated_quantity INTEGER,
+        served_quantity INTEGER,
+        discount_type REAL,
+        discount_amount REAL,
+        gross_amount REAL,
+        net_amount REAL,
+        allocated_amount REAL,
+        remarks TEXT,
+        created_date TEXT,
+        modified_date TEXT,
+        FOREIGN KEY(order_id) REFERENCES sales_order(order_id) ON DELETE CASCADE
+      )
+    ''');
+
+    // --- MIGRATION LOGIC ---
+    // Fixes "no column named customer_name" if table exists from older version.
+    try {
+      final List<Map<String, dynamic>> columns = await db.rawQuery(
+        'PRAGMA table_info(sales_order)',
+      );
+      final existingColumns = columns.map((c) => c['name'] as String).toSet();
+
+      if (!existingColumns.contains('po_no')) {
+        await db.execute('ALTER TABLE sales_order ADD COLUMN po_no TEXT');
+      }
+      if (!existingColumns.contains('remarks')) {
+        await db.execute('ALTER TABLE sales_order ADD COLUMN remarks TEXT');
+      }
+      if (!existingColumns.contains('salesman_id')) {
+        await db.execute('ALTER TABLE sales_order ADD COLUMN salesman_id INTEGER');
+      }
+      if (!existingColumns.contains('is_synced')) {
+        await db.execute('ALTER TABLE sales_order ADD COLUMN is_synced INTEGER DEFAULT 0');
+      }
+    } catch (e) {
+      debugPrint('Error migrating sales_order table: $e');
+    }
+  }
+
   void _saveOrder() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -965,29 +1070,79 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     final now = DateTime.now();
     final supplierId = (_selectedSupplier != null) ? _supplierIdByName[_selectedSupplier!] : null;
+    final authState = ref.read(authProvider);
+    final salesmanId = authState.salesman?.id ?? authState.user?.userId;
 
     // Create order header
     final order = OrderModel(
       orderNo: _poNumberCtrl.text.trim(),
+      poNo: _poNumberCtrl.text.trim(), // Using same for now, or add separate field if needed
       customerName: _customerNameCtrl.text.trim(),
       customerCode: _customerCodeCtrl.text.trim(),
+      salesmanId: salesmanId,
+      supplierId: supplierId,
+      orderDate: now,
       createdAt: now,
       totalAmount: _grandTotal,
+      netAmount: _grandTotal, // Assuming no global discount for now
       status: 'Pending',
       type: OrderType.manual,
       supplier: _selectedSupplier,
-      supplierId: supplierId,
       priceType: _selectedPriceType,
       hasAttachment: _callsheetImagePath != null,
       callsheetImagePath: _callsheetImagePath,
+      remarks: _remarksCtrl.text.trim(),
     );
 
     try {
-      // Save order header to local storage
-      ref.read(orderListProvider.notifier).addOrder(order);
+      final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 
-      // TODO: Save order details to database
-      // For now, we'll just show the summary
+      // 1. Ensure tables exist
+      await _ensureSalesTablesExist(db);
+
+      // 2. Insert Header
+      final headerRow = order.toSqlite();
+      // Remove ID to let SQLite auto-increment
+      headerRow.remove('id');
+      // Remove fields not in table
+      headerRow.remove('customer_name');
+      headerRow.remove('supplier');
+      headerRow.remove('order_type');
+      headerRow.remove('product');
+      headerRow.remove('product_id');
+      headerRow.remove('product_base_id');
+      headerRow.remove('unit_id');
+      headerRow.remove('unit_count');
+      headerRow.remove('price_type');
+      headerRow.remove('quantity');
+      headerRow.remove('has_attachment');
+      headerRow.remove('callsheet_image_path');
+
+      final newOrderId = await db.insert(
+        'sales_order',
+        headerRow,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      // 3. Insert Details
+      final batch = db.batch();
+      for (final item in _cartItems) {
+        batch.insert('sales_order_details', {
+          'order_id': newOrderId,
+          'product_id': item.productId,
+          'unit_price': item.price,
+          'ordered_quantity': item.quantity,
+          'gross_amount': item.total,
+          'net_amount': item.total, // Assuming no line discount
+          'created_date': now.toIso8601String(),
+          'remarks': '',
+        });
+      }
+      await batch.commit(noResult: true);
+
+      // 4. Update Provider State (Optional, for UI refresh)
+      // We create a copy with the new ID to add to the list
+      // ref.read(orderListProvider.notifier).addOrder(order);
 
       final summary = StringBuffer()
         ..writeln('Order Type: Manual')
@@ -995,6 +1150,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         ..writeln('PO No: ${order.orderNo}')
         ..writeln('Supplier: ${order.supplier}')
         ..writeln('Price Type: ${order.priceType}')
+        ..writeln('Remarks: ${order.remarks}')
         ..writeln('Items: ${_cartItems.length}')
         ..writeln('Total: ₱${order.totalAmount.toStringAsFixed(2)}')
         ..writeln('Attachment: ${order.hasAttachment ? "Yes" : "No"}')
@@ -1014,6 +1170,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         _customerNameCtrl.clear();
         _customerCodeCtrl.clear();
         _poNumberCtrl.clear();
+        _remarksCtrl.clear();
         _callsheetImagePath = null;
       });
 
@@ -1218,6 +1375,26 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                 color: AppColors.textMuted,
                                 fontStyle: FontStyle.italic,
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _remarksCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'Remarks',
+                                hintText: 'Enter notes (optional)',
+                                prefixIcon: const Icon(Icons.notes, size: 20),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                              ),
+                              maxLines: 3,
                             ),
                           ],
                         ),

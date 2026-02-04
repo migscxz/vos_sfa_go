@@ -1,8 +1,6 @@
 // lib/core/database/table_schemas.dart
 
 class TableSchemas {
-
-
   static const String userTable = '''
   CREATE TABLE IF NOT EXISTS user (
     user_id INTEGER PRIMARY KEY,
@@ -100,8 +98,6 @@ class TableSchemas {
       date_added TEXT
     )
   ''';
-
-
 
   static const String unitTable = '''
     CREATE TABLE IF NOT EXISTS unit (
@@ -273,7 +269,20 @@ class TableSchemas {
       for_shipping_at TEXT,
       delivered_at TEXT,
       on_hold_at TEXT,
-      cancelled_at TEXT
+      cancelled_at TEXT,
+      customer_name TEXT,
+      is_synced INTEGER DEFAULT 0,
+      order_type TEXT,
+      supplier TEXT,
+      product TEXT,
+      product_id INTEGER,
+      product_base_id INTEGER,
+      unit_id INTEGER,
+      unit_count REAL,
+      price_type TEXT,
+      quantity INTEGER,
+      has_attachment INTEGER,
+      callsheet_image_path TEXT
     )
   ''';
 
