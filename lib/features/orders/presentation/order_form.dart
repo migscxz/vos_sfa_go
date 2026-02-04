@@ -7,13 +7,14 @@ import 'package:sqflite/sqflite.dart';
 import 'package:vos_sfa_go/core/api/api_config.dart';
 import 'package:vos_sfa_go/core/api/global_remote_api.dart';
 import 'package:vos_sfa_go/core/database/database_manager.dart';
+import 'package:vos_sfa_go/features/orders/presentation/widgets/modals/customer_picker_modal.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/customer_model.dart';
-import '../../../data/models/order_line_item.dart';
 import '../../../data/models/order_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../callsheet/presentation/callsheet_capture_page.dart';
+import '../data/models/cart_item_model.dart';
 
 class _ProductVariantMeta {
   final int productId; // variant product_id
@@ -277,7 +278,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   String? _callsheetImagePath;
 
   // Cart items for cart-style ordering
-  final List<OrderLineItem> _cartItems = [];
+  final List<CartItem> _cartItems = [];
 
   double get _grandTotal => _cartItems.fold(0.0, (sum, item) => sum + item.total);
 
@@ -411,16 +412,20 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   void _showCustomerSearchDialog() async {
     final selectedCustomer = await showDialog<Customer>(
       context: context,
-      builder: (context) => CustomerSearchDialog(customers: _customers),
+      builder: (context) => CustomerPickerModal(
+        customers: _customers,
+        selectedCustomer: _selectedCustomer,
+        onCustomerSelected: (customer) {
+          if (customer != null) {
+            setState(() {
+              _selectedCustomer = customer;
+              _customerNameCtrl.text = customer.name;
+              _customerCodeCtrl.text = customer.code;
+            });
+          }
+        },
+      ),
     );
-
-    if (selectedCustomer != null) {
-      setState(() {
-        _selectedCustomer = selectedCustomer;
-        _customerNameCtrl.text = selectedCustomer.name;
-        _customerCodeCtrl.text = selectedCustomer.code;
-      });
-    }
   }
 
   void _showMultiSelectProductDialog() async {
@@ -444,7 +449,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
             // Default to PCS variant if available, otherwise use the selected one
             final defaultUnitDisplay = _getDefaultUnitForProduct(productDisplay);
             _cartItems.add(
-              OrderLineItem(
+              CartItem(
                 productDisplay: productDisplay,
                 productId: meta.productId,
                 productBaseId: meta.baseId,

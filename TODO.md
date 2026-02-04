@@ -1,37 +1,13 @@
-# Cart-Style Ordering Refactoring TODO
+# TODO: Add Orders Feature Structure
 
-## Phase 1: UI Cleanup & Customer Selection
+## Tasks
 
-- [x] Remove Order Type: Delete the \_orderType variable and the \_buildOrderTypeSelector widget. Default the logic to "Manual" internally if needed.
-- [x] Load Customers: Create a function \_loadCustomersFromDb() similar to \_loadSuppliersFromDb() to populate a list for the search.
-- [x] Customer Search Widget: Replace the "Customer Name" TextFormField with a Searchable Dropdown (or a read-only text field that opens a search dialog when tapped).
-- [x] Auto-Fill Logic: When a customer is selected from the search, automatically set the text for \_customerCodeCtrl.
-
-## Phase 2: Supplier & Product Logic
-
-- [x] Supplier Search: Convert the existing Supplier dropdown into a Searchable Dropdown.
-- [x] Filter Products: Ensure \_getProductsForSupplier(supplierId) returns only products linked to that supplier in the product_per_supplier table.
-- [x] Multi-Select Dialog: Create a new widget \_showMultiSelectProductDialog.
-  - It should accept a list of products.
-  - It should display a CheckboxListTile for each product.
-  - It should return a List<Product> of selected items.
-
-## Phase 3: The "Cart" (Order Details)
-
-- [x] State Management: Replace the single variables (\_selectedProduct, \_quantityCtrl) with a list: List<OrderLineItem> \_cartItems = [];.
-- [x] Dynamic List View: In the "Order Details" container, remove the old product dropdown. Replace it with:
-  - An "Add Products" button.
-  - A ListView.builder that renders a card for each item in \_cartItems.
-- [x] Row Logic: Inside each row of the list:
-  - Show Product Name.
-  - Show a Dropdown for Unit/Packaging (populated from that product's available units).
-  - Show a Quantity input field.
-  - Add a "Remove" (Trash) icon.
-- [x] Real-Time Totals: Create a getter double get \_grandTotal that loops through \_cartItems and sums up (price \* quantity). Display this at the bottom.
-
-## Phase 4: Saving Data
-
-- [x] Update Save Function: Refactor \_saveOrder to:
-  - Insert into sales_order table (get the new ID).
-  - Loop through \_cartItems and insert each into sales_order_detail using that ID.
-  - Clear the form.
+- [x] Create application/order_controller.dart: A controller class to handle order business logic, interacting with repository and managing order state.
+- [x] Create data/models/cart_item_model.dart: A model for cart items, possibly extending or similar to OrderLineItem.
+- [x] Create data/repositories/order_repository.dart: Repository for order data operations, using DatabaseManager.
+- [x] Create presentation/widgets/order_item_card.dart: Widget to display individual order items in the cart.
+- [x] Create presentation/widgets/modals/customer_picker_modal.dart: Modal for customer selection (extract from order_form.dart).
+- [x] Create presentation/widgets/modals/supplier_picker_modal.dart: Modal for supplier selection (extract from order_form.dart).
+- [x] Create presentation/widgets/modals/product_multi_picker_modal.dart: Modal for multi-product selection (extract from order_form.dart).
+- [x] Update order_form.dart to use the new modal widgets instead of inline dialogs.
+- [x] Test integration and ensure no breaking changes.
