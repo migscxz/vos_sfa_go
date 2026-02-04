@@ -21,15 +21,9 @@ import 'widgets/modals/product_picker_modal.dart';
 import 'checkout_page.dart';
 
 class OrderFormPage extends ConsumerStatefulWidget {
-  const OrderFormPage({
-    super.key,
-    this.initialCustomerName,
-    this.initialCustomerCode,
-    this.initialType,
-  });
+  const OrderFormPage({super.key, this.initialCustomer, this.initialType});
 
-  final String? initialCustomerName;
-  final String? initialCustomerCode;
+  final Customer? initialCustomer;
   final OrderType? initialType;
 
   @override
@@ -112,8 +106,11 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   void initState() {
     super.initState();
 
-    _customerNameCtrl.text = widget.initialCustomerName ?? '';
-    _customerCodeCtrl.text = widget.initialCustomerCode ?? '';
+    if (widget.initialCustomer != null) {
+      _selectedCustomer = widget.initialCustomer;
+      _customerNameCtrl.text = widget.initialCustomer!.name;
+      _customerCodeCtrl.text = widget.initialCustomer!.code;
+    }
     _poNumberCtrl.text = '';
 
     // 🔹 Lock price type to logged-in salesman’s price_type

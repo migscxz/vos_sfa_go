@@ -5,10 +5,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../providers/dap_providers.dart';
 import '../data/dap_model.dart';
 
-
 // Order Form
 import '../../orders/presentation/order_form.dart';
 import '../../../data/models/order_model.dart';
+import '../../../data/models/customer_model.dart';
 
 class DapMonitorPage extends ConsumerWidget {
   final DateTime? initialDate;
@@ -30,9 +30,7 @@ class DapMonitorPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text('DAP: $dateTitle'),
-      ),
+      appBar: AppBar(title: Text('DAP: $dateTitle')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
@@ -82,13 +80,15 @@ class DapMonitorPage extends ConsumerWidget {
                       children: dapList
                           .map(
                             (item) => Column(
-                          children: [
-                            _DapTableRow(item: item),
-                            const Divider(
-                                color: AppColors.border, height: 1),
-                          ],
-                        ),
-                      )
+                              children: [
+                                _DapTableRow(item: item),
+                                const Divider(
+                                  color: AppColors.border,
+                                  height: 1,
+                                ),
+                              ],
+                            ),
+                          )
                           .toList(),
                     );
                   },
@@ -162,10 +162,11 @@ class _DapTableRow extends StatelessWidget {
     final bool isCompleted = item.isCompleted;
     final bool hasCustomer = item.customerId != null;
 
-    final TextStyle baseStyle = theme.textTheme.bodySmall?.copyWith(
-      color: AppColors.textDark,
-      fontSize: 12,
-    ) ??
+    final TextStyle baseStyle =
+        theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textDark,
+          fontSize: 12,
+        ) ??
         const TextStyle(fontSize: 12);
 
     return Material(
@@ -174,28 +175,27 @@ class _DapTableRow extends StatelessWidget {
         onTap: () {
           if (isCompleted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('This task is already completed.'),
-              ),
+              const SnackBar(content: Text('This task is already completed.')),
             );
           } else if (hasCustomer) {
             // ✅ Order-taking DAP (customer_id is present) → go to Order Form
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => OrderFormPage(
-                  initialCustomerName: item.accountName,
-                  initialCustomerCode: item.customerCode ?? '',
+                  initialCustomer: Customer(
+                    id: item.customerId ?? 0,
+                    name: item.accountName,
+                    code: item.customerCode ?? '',
+                  ),
                   initialType: OrderType.manual,
                 ),
               ),
             );
           } else {
             // ✅ Photo-only DAP (no customer_id) → go to Photo Task Page
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => PhotoTaskPage(dap: item),
-              ),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => PhotoTaskPage(dap: item)));
           }
         },
         child: Container(
@@ -214,9 +214,7 @@ class _DapTableRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isCompleted
-                          ? "Done"
-                          : (hasCustomer ? "Start" : "Photo"),
+                      isCompleted ? "Done" : (hasCustomer ? "Start" : "Photo"),
                       style: baseStyle.copyWith(
                         fontWeight: isCompleted
                             ? FontWeight.normal
@@ -224,8 +222,8 @@ class _DapTableRow extends StatelessWidget {
                         color: isCompleted
                             ? Colors.green
                             : (hasCustomer
-                            ? Colors.blue[700]
-                            : Colors.orangeAccent),
+                                  ? Colors.blue[700]
+                                  : Colors.orangeAccent),
                       ),
                     ),
                   ],
@@ -239,10 +237,7 @@ class _DapTableRow extends StatelessWidget {
               ),
 
               // Task column
-              Expanded(
-                flex: 4,
-                child: Text(item.taskName, style: baseStyle),
-              ),
+              Expanded(flex: 4, child: Text(item.taskName, style: baseStyle)),
 
               if (!isCompleted)
                 Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
@@ -265,9 +260,7 @@ class PhotoTaskPage extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Photo Task'),
-      ),
+      appBar: AppBar(title: const Text('Photo Task')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -283,20 +276,19 @@ class PhotoTaskPage extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Target / Account:',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            Text(
-              dap.accountName,
-              style: theme.textTheme.bodyMedium,
-            ),
+            Text(dap.accountName, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 12),
             if (dap.additionalDescription != null &&
                 dap.additionalDescription!.isNotEmpty) ...[
               Text(
                 'Details:',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 dap.additionalDescription!,
@@ -304,10 +296,7 @@ class PhotoTaskPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
-            Text(
-              'Priority: ${dap.priority}',
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('Priority: ${dap.priority}', style: theme.textTheme.bodySmall),
             const SizedBox(height: 24),
             // TODO: Replace this with real camera / photo capture flow
             Center(

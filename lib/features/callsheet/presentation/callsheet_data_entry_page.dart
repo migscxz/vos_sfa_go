@@ -11,6 +11,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/customer_model.dart';
 import '../../../../providers/auth_provider.dart';
 import '../../orders/data/repositories/order_repository.dart';
+import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
 import 'callsheet_capture_page.dart';
 
 class CallsheetDataEntryPage extends ConsumerStatefulWidget {
@@ -206,6 +207,19 @@ class _CallsheetDataEntryPageState
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OrderFormPage(initialCustomer: widget.customer),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
+        label: const Text("+ Product"),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
     );
   }

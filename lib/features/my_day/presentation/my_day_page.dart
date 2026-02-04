@@ -11,6 +11,8 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/dap_providers.dart';
 import '../../dap_monitor/data/dap_model.dart';
 
+import '../../../data/models/customer_model.dart';
+
 /// --- Styling Constants (clean + presentation-ready) ---
 class AppStyle {
   static const Color background = Color(0xFFF8FAFC);
@@ -57,19 +59,21 @@ class MyDayCustomer {
     final parts = <String>[];
     if (brgy != null && brgy!.trim().isNotEmpty) parts.add(brgy!.trim());
     if (city != null && city!.trim().isNotEmpty) parts.add(city!.trim());
-    if (province != null && province!.trim().isNotEmpty) parts.add(province!.trim());
+    if (province != null && province!.trim().isNotEmpty)
+      parts.add(province!.trim());
     return parts.isEmpty ? '' : parts.join(', ');
   }
 }
 
 /// Customers assigned to a given salesman, from SQLite
-final myDayCustomersProvider =
-FutureProvider.family<List<MyDayCustomer>, int?>((ref, salesmanId) async {
-  if (salesmanId == null) return [];
+final myDayCustomersProvider = FutureProvider.family<List<MyDayCustomer>, int?>(
+  (ref, salesmanId) async {
+    if (salesmanId == null) return [];
 
-  final db = await DatabaseManager().getDatabase(DatabaseManager.dbCustomer);
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbCustomer);
 
-  final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
     SELECT DISTINCT
       c.id,
       c.customer_code,
@@ -82,17 +86,21 @@ FutureProvider.family<List<MyDayCustomer>, int?>((ref, salesmanId) async {
       ON cs.customer_id = c.id
     WHERE cs.salesman_id = ?
     ORDER BY c.customer_name
-  ''', [salesmanId]);
+  ''',
+      [salesmanId],
+    );
 
-  final Map<int, MyDayCustomer> uniqueById = {};
-  for (final row in rows) {
-    final customer = MyDayCustomer.fromMap(row as Map<String, dynamic>);
-    uniqueById[customer.id] = customer;
-  }
+    final Map<int, MyDayCustomer> uniqueById = {};
+    for (final row in rows) {
+      final customer = MyDayCustomer.fromMap(row as Map<String, dynamic>);
+      uniqueById[customer.id] = customer;
+    }
 
-  final result = uniqueById.values.toList()..sort((a, b) => a.name.compareTo(b.name));
-  return result;
-});
+    final result = uniqueById.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return result;
+  },
+);
 
 class MyDayPage extends ConsumerWidget {
   const MyDayPage({super.key});
@@ -124,12 +132,18 @@ class MyDayPage extends ConsumerWidget {
                   _buildOverviewRow(dapAsync, customersAsync),
                   const SizedBox(height: 18),
 
-                  _buildSectionHeader("Today's Plan", Icons.calendar_today_rounded),
+                  _buildSectionHeader(
+                    "Today's Plan",
+                    Icons.calendar_today_rounded,
+                  ),
                   const SizedBox(height: 10),
                   _buildCompactDapSection(context, dapAsync),
                   const SizedBox(height: 22),
 
-                  _buildSectionHeader("My Customers", Icons.people_outline_rounded),
+                  _buildSectionHeader(
+                    "My Customers",
+                    Icons.people_outline_rounded,
+                  ),
                   const SizedBox(height: 10),
                   if (salesmanId == null)
                     _buildInfoNotice(
@@ -177,7 +191,11 @@ class MyDayPage extends ConsumerWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  const Icon(Icons.calendar_month_rounded, size: 16, color: AppStyle.textMuted),
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    size: 16,
+                    color: AppStyle.textMuted,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     date,
@@ -192,20 +210,32 @@ class MyDayPage extends ConsumerWidget {
                     Container(
                       width: 4,
                       height: 4,
-                      decoration: const BoxDecoration(color: AppStyle.border, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        color: AppStyle.border,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.blueBright.withOpacity(0.10),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppColors.blueBright.withOpacity(0.24)),
+                        border: Border.all(
+                          color: AppColors.blueBright.withOpacity(0.24),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.person, size: 14, color: AppColors.blueBright),
+                          const Icon(
+                            Icons.person,
+                            size: 14,
+                            color: AppColors.blueBright,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             salesman.name,
@@ -250,15 +280,21 @@ class MyDayPage extends ConsumerWidget {
 
   // ---------- OVERVIEW / STATS ----------
   Widget _buildOverviewRow(
-      AsyncValue<List<DapWithDetails>> dapAsync,
-      AsyncValue<List<MyDayCustomer>> customersAsync,
-      ) {
-    final tasks = dapAsync.maybeWhen(data: (d) => d, orElse: () => const <DapWithDetails>[]);
+    AsyncValue<List<DapWithDetails>> dapAsync,
+    AsyncValue<List<MyDayCustomer>> customersAsync,
+  ) {
+    final tasks = dapAsync.maybeWhen(
+      data: (d) => d,
+      orElse: () => const <DapWithDetails>[],
+    );
     final totalTasks = tasks.length;
     final done = tasks.where((t) => t.isCompleted).length;
     final pending = totalTasks - done;
 
-    final customers = customersAsync.maybeWhen(data: (d) => d, orElse: () => const <MyDayCustomer>[]);
+    final customers = customersAsync.maybeWhen(
+      data: (d) => d,
+      orElse: () => const <MyDayCustomer>[],
+    );
     final totalCustomers = customers.length;
 
     final progress = totalTasks == 0 ? 0.0 : done / totalTasks;
@@ -310,7 +346,11 @@ class MyDayPage extends ConsumerWidget {
             children: [
               const Text(
                 'Completion',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppStyle.textMain),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppStyle.textMain,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -325,7 +365,11 @@ class MyDayPage extends ConsumerWidget {
               const SizedBox(width: 10),
               Text(
                 totalTasks == 0 ? '—' : '${(progress * 100).round()}%',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppStyle.textMuted),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppStyle.textMuted,
+                ),
               ),
             ],
           ),
@@ -336,9 +380,9 @@ class MyDayPage extends ConsumerWidget {
 
   // ---------- DAP SECTION ----------
   Widget _buildCompactDapSection(
-      BuildContext context,
-      AsyncValue<List<DapWithDetails>> dapAsync,
-      ) {
+    BuildContext context,
+    AsyncValue<List<DapWithDetails>> dapAsync,
+  ) {
     return dapAsync.when(
       loading: () => _buildLoadingBox(),
       error: (e, _) => _buildInfoNotice(
@@ -372,7 +416,11 @@ class MyDayPage extends ConsumerWidget {
                         color: const Color(0xFF3B82F6).withOpacity(0.10),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.assignment_rounded, color: Color(0xFF3B82F6), size: 18),
+                      child: const Icon(
+                        Icons.assignment_rounded,
+                        color: Color(0xFF3B82F6),
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     const Expanded(
@@ -387,7 +435,9 @@ class MyDayPage extends ConsumerWidget {
                     ),
                     _TinyPill(
                       text: '$pending pending',
-                      color: pending == 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                      color: pending == 0
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFF59E0B),
                       bg: pending == 0
                           ? const Color(0xFF10B981).withOpacity(0.10)
                           : const Color(0xFFF59E0B).withOpacity(0.12),
@@ -435,10 +485,10 @@ class MyDayPage extends ConsumerWidget {
 
   // ---------- CUSTOMER LIST ----------
   Widget _buildCustomerList(
-      BuildContext context,
-      AsyncValue<List<MyDayCustomer>> customersAsync,
-      AsyncValue<List<DapWithDetails>> dapAsync,
-      ) {
+    BuildContext context,
+    AsyncValue<List<MyDayCustomer>> customersAsync,
+    AsyncValue<List<DapWithDetails>> dapAsync,
+  ) {
     return customersAsync.when(
       loading: () => _buildLoadingBox(),
       error: (e, _) => _buildInfoNotice(
@@ -450,7 +500,10 @@ class MyDayPage extends ConsumerWidget {
       data: (customers) {
         if (customers.isEmpty) return _buildEmptyState("No customers assigned");
 
-        final dapItems = dapAsync.maybeWhen(data: (d) => d, orElse: () => const <DapWithDetails>[]);
+        final dapItems = dapAsync.maybeWhen(
+          data: (d) => d,
+          orElse: () => const <DapWithDetails>[],
+        );
 
         // Build task map once for performance + cleanliness
         final Map<int, List<DapWithDetails>> tasksByCustomer = {};
@@ -470,14 +523,17 @@ class MyDayPage extends ConsumerWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: customers.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, color: AppStyle.border, indent: 66),
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, color: AppStyle.border, indent: 66),
             itemBuilder: (context, index) {
               final customer = customers[index];
-              final tasks = tasksByCustomer[customer.id] ?? const <DapWithDetails>[];
+              final tasks =
+                  tasksByCustomer[customer.id] ?? const <DapWithDetails>[];
               return _CustomerListItem(
                 customer: customer,
                 tasks: tasks,
-                onOpenTasks: () => _showCustomerTasksBottomSheet(context, customer, tasks),
+                onOpenTasks: () =>
+                    _showCustomerTasksBottomSheet(context, customer, tasks),
               );
             },
           ),
@@ -611,7 +667,10 @@ class MyDayPage extends ConsumerWidget {
                         const Expanded(
                           child: Text(
                             'All Tasks Today',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                         GFIconButton(
@@ -636,24 +695,32 @@ class MyDayPage extends ConsumerWidget {
                           return Container(
                             decoration: BoxDecoration(
                               color: AppStyle.surface,
-                              borderRadius: BorderRadius.circular(AppStyle.radius),
+                              borderRadius: BorderRadius.circular(
+                                AppStyle.radius,
+                              ),
                               border: Border.all(color: AppStyle.border),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                               child: Row(
                                 children: [
                                   Icon(
                                     t.isCompleted
                                         ? Icons.check_circle_rounded
                                         : Icons.radio_button_unchecked_rounded,
-                                    color: t.isCompleted ? const Color(0xFF10B981) : AppColors.blueBright,
+                                    color: t.isCompleted
+                                        ? const Color(0xFF10B981)
+                                        : AppColors.blueBright,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           t.accountName,
@@ -661,8 +728,9 @@ class MyDayPage extends ConsumerWidget {
                                             fontWeight: FontWeight.w900,
                                             fontSize: 13.5,
                                             color: AppStyle.textMain,
-                                            decoration:
-                                            t.isCompleted ? TextDecoration.lineThrough : null,
+                                            decoration: t.isCompleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -683,7 +751,11 @@ class MyDayPage extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 10),
                                   if (!t.isCompleted)
-                                    const Icon(Icons.chevron_right, color: AppStyle.border, size: 18),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppStyle.border,
+                                      size: 18,
+                                    ),
                                 ],
                               ),
                             ),
@@ -702,10 +774,10 @@ class MyDayPage extends ConsumerWidget {
   }
 
   void _showCustomerTasksBottomSheet(
-      BuildContext context,
-      MyDayCustomer customer,
-      List<DapWithDetails> tasks,
-      ) {
+    BuildContext context,
+    MyDayCustomer customer,
+    List<DapWithDetails> tasks,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -739,7 +811,10 @@ class MyDayPage extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             customer.name,
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -775,8 +850,11 @@ class MyDayPage extends ConsumerWidget {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => OrderFormPage(
-                                  initialCustomerName: customer.name,
-                                  initialCustomerCode: customer.code,
+                                  initialCustomer: Customer(
+                                    id: customer.id,
+                                    name: customer.name,
+                                    code: customer.code,
+                                  ),
                                   initialType: OrderType.manual,
                                 ),
                               ),
@@ -788,8 +866,14 @@ class MyDayPage extends ConsumerWidget {
                           color: AppColors.blueBright,
                           shape: GFButtonShape.pills,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ],
                     ),
@@ -798,18 +882,24 @@ class MyDayPage extends ConsumerWidget {
                       child: tasks.isEmpty
                           ? _buildEmptyState("No tasks for this customer today")
                           : ListView.separated(
-                        controller: controller,
-                        itemCount: tasks.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => Container(
-                          decoration: BoxDecoration(
-                            color: AppStyle.surface,
-                            borderRadius: BorderRadius.circular(AppStyle.radius),
-                            border: Border.all(color: AppStyle.border),
-                          ),
-                          child: _DapItemRow(item: tasks[i], showChevron: false),
-                        ),
-                      ),
+                              controller: controller,
+                              itemCount: tasks.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (_, i) => Container(
+                                decoration: BoxDecoration(
+                                  color: AppStyle.surface,
+                                  borderRadius: BorderRadius.circular(
+                                    AppStyle.radius,
+                                  ),
+                                  border: Border.all(color: AppStyle.border),
+                                ),
+                                child: _DapItemRow(
+                                  item: tasks[i],
+                                  showChevron: false,
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -897,7 +987,7 @@ class _MiniStatCard extends StatelessWidget {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -909,11 +999,7 @@ class _TinyPill extends StatelessWidget {
   final Color color;
   final Color bg;
 
-  const _TinyPill({
-    required this.text,
-    required this.color,
-    required this.bg,
-  });
+  const _TinyPill({required this.text, required this.color, required this.bg});
 
   @override
   Widget build(BuildContext context) {
@@ -940,10 +1026,7 @@ class _DapItemRow extends StatelessWidget {
   final DapWithDetails item;
   final bool showChevron;
 
-  const _DapItemRow({
-    required this.item,
-    this.showChevron = true,
-  });
+  const _DapItemRow({required this.item, this.showChevron = true});
 
   @override
   Widget build(BuildContext context) {
@@ -954,7 +1037,9 @@ class _DapItemRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            isDone
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             color: isDone ? const Color(0xFF10B981) : AppColors.blueBright,
             size: 20,
           ),
@@ -1026,11 +1111,15 @@ class _CustomerListItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.blueBright.withOpacity(0.10),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.blueBright.withOpacity(0.18)),
+                border: Border.all(
+                  color: AppColors.blueBright.withOpacity(0.18),
+                ),
               ),
               child: Center(
                 child: Text(
-                  customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+                  customer.name.isNotEmpty
+                      ? customer.name[0].toUpperCase()
+                      : '?',
                   style: const TextStyle(
                     color: AppColors.blueBright,
                     fontWeight: FontWeight.w900,
@@ -1087,11 +1176,16 @@ class _CustomerListItem extends StatelessWidget {
               children: [
                 if (hasTasks)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10B981).withOpacity(0.10),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.18)),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withOpacity(0.18),
+                      ),
                     ),
                     child: Text(
                       "${tasks.length} task(s)",
@@ -1104,7 +1198,10 @@ class _CustomerListItem extends StatelessWidget {
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppStyle.border.withOpacity(0.35),
                       borderRadius: BorderRadius.circular(8),
@@ -1140,8 +1237,11 @@ class _CompactOrderButton extends StatelessWidget {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => OrderFormPage(
-              initialCustomerName: customer.name,
-              initialCustomerCode: customer.code,
+              initialCustomer: Customer(
+                id: customer.id,
+                name: customer.name,
+                code: customer.code,
+              ),
               initialType: OrderType.manual,
             ),
           ),
