@@ -199,6 +199,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
               _selectedSupplier = supplier;
               _supplierCtrl.text = supplier;
               _selectedProduct = null;
+              _cartItems.clear(); // Clear cart when supplier changes
             });
             _generatePoNumberForSupplier();
           }
@@ -894,8 +895,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                       size: 20,
                                     ),
                                     suffixIcon: const Icon(
-                                      Icons.search,
-                                      size: 20,
+                                      Icons.arrow_drop_down,
+                                      size: 24,
                                     ),
                                     filled: true,
                                     fillColor: Colors.grey[50],
@@ -1011,7 +1012,13 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                               decoration: InputDecoration(
                                 labelText: 'Remarks',
                                 hintText: 'Enter notes (optional)',
-                                prefixIcon: const Icon(Icons.notes, size: 20),
+                                alignLabelWithHint: true,
+                                prefixIcon: const Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: 58,
+                                  ), // Align icon to top
+                                  child: Icon(Icons.notes, size: 20),
+                                ),
                                 filled: true,
                                 fillColor: Colors.grey[100],
                                 border: OutlineInputBorder(
@@ -1027,7 +1034,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                   ),
                                 ),
                               ),
-                              maxLines: 3,
+                              maxLines: 4,
                             ),
                           ],
                         ),
