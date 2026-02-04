@@ -212,4 +212,88 @@ class OrderRepository {
       );
     }).toList();
   }
+
+  Future<Map<String, dynamic>> getCallsheetData(String customerCode) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+
+    // 1. Get last 8 order dates
+    final dateRows = await db.rawQuery(
+      '''
+      SELECT DISTINCT substr(created_date, 1, 10) as day 
+      FROM sales_order 
+      WHERE customer_code = ? 
+      ORDER BY created_date DESC 
+      LIMIT 8
+    ''',
+      [customerCode],
+    );
+
+    final List<String> dates = dateRows.map((r) => r['day'] as String).toList();
+
+    if (dates.isEmpty) {
+      return {'dates': <String>[], 'products': <Map<String, dynamic>>[]};
+    }
+
+    // 2. Get product history
+    final placeHolders = List.filled(dates.length, '?').join(',');
+    final query =
+        '''
+      SELECT 
+        d.product_id, 
+        p.product_name, 
+        p.price_per_unit, 
+        substr(s.created_date, 1, 10) as day, 
+        SUM(d.ordered_quantity) as qty
+      FROM sales_order_details d
+      JOIN sales_order s ON d.order_id = s.order_id
+      JOIN product p ON d.product_id = p.product_id
+      WHERE s.customer_code = ? 
+        AND day IN ($placeHolders)
+      GROUP BY d.product_id, day
+    ''';
+
+    final rows = await db.rawQuery(query, [customerCode, ...dates]);
+
+    // 3. Process into structure
+    final Map<int, Map<String, dynamic>> productMap = {};
+
+    for (final row in rows) {
+      final pid = row['product_id'] as int;
+      final day = row['day'] as String;
+      final qty = (row['qty'] as num).toDouble();
+      final name = (row['product_name'] ?? '').toString();
+      final price = (row['price_per_unit'] as num?)?.toDouble() ?? 0.0;
+
+      if (!productMap.containsKey(pid)) {
+        productMap[pid] = {
+          'id': pid,
+          'name': name,
+          'price': price,
+          'history': <String, double>{},
+        };
+      }
+      (productMap[pid]!['history'] as Map<String, double>)[day] = qty;
+    }
+
+    return {'dates': dates, 'products': productMap.values.toList()};
+  }
+
+  Future<void> saveCallsheetAttachment({
+    required int? salesOrderId,
+    required String attachmentPath,
+    required int createdBy,
+  }) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    final now = DateTime.now().toIso8601String();
+
+    await db.insert('sales_order_attachment', {
+      'sales_order_id': salesOrderId,
+      'attachment': attachmentPath,
+      'created_by': createdBy,
+      'created_date': now,
+      'updated_by': createdBy,
+      'updated_date': now,
+      'is_synced': 0,
+    });
+  }
 }

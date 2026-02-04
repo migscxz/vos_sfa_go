@@ -384,7 +384,8 @@ class TableSchemas {
       status TEXT,
       isPosted INTEGER,
       isApplied INTEGER,
-      isReceived INTEGER
+      isReceived INTEGER,
+      UNIQUE(return_number)
     )
   ''';
 
@@ -393,17 +394,27 @@ class TableSchemas {
       detail_id INTEGER PRIMARY KEY,
       return_no TEXT,
       product_id INTEGER,
-      quantity REAL,
       unit_price REAL,
-      total_amount REAL,
-      discount_amount REAL,
-      discount_type INTEGER,
+      returned_quantity INTEGER,
       gross_amount REAL,
-      reason TEXT,
-      sales_return_type_id INTEGER,
-      created_at TEXT,
-      updated_at TEXT,
-      status TEXT
+      net_amount REAL,
+      remarks TEXT,
+      created_date TEXT,
+      modified_date TEXT,
+      FOREIGN KEY(return_no) REFERENCES sales_return(return_number) ON DELETE CASCADE
+    )
+  ''';
+
+  static const String salesOrderAttachmentTable = '''
+    CREATE TABLE IF NOT EXISTS sales_order_attachment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sales_order_id INTEGER,
+      attachment TEXT,
+      created_by INTEGER,
+      created_date TEXT,
+      updated_by INTEGER,
+      updated_date TEXT,
+      is_synced INTEGER DEFAULT 0
     )
   ''';
 

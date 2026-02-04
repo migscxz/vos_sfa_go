@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:getwidget/getwidget.dart';
 import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_capture_page.dart';
 import 'package:vos_sfa_go/features/callsheet/presentation/callsheet_data_entry_page.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../providers/customer_provider.dart';
+import '../../../orders/presentation/widgets/modals/customer_picker_modal.dart';
+import '../../../../data/models/customer_model.dart';
 
-class QuickActionsCard extends StatelessWidget {
+class QuickActionsCard extends ConsumerWidget {
   final bool isTablet;
 
   const QuickActionsCard({super.key, required this.isTablet});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final customersAsync = ref.watch(customersWithHistoryProvider);
+
     return GFCard(
       elevation: 0,
       color: Colors.white,
@@ -49,9 +55,9 @@ class QuickActionsCard extends StatelessWidget {
                   label: 'Encoding',
                   color: const Color(0xFF3B82F6),
                   onTap: () {
-                    Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const OrderFormPage()));
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const OrderFormPage()),
+                    );
                   },
                 ),
               ),
@@ -62,22 +68,68 @@ class QuickActionsCard extends StatelessWidget {
                   label: 'Take Photo',
                   color: const Color(0xFF10B981),
                   onTap: () {
-                    Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const CallsheetCapturePage()));
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CallsheetCapturePage(),
+                      ),
+                    );
                   },
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.print_rounded,
-                  label: 'Printables',
+                  icon: Icons.list_alt_rounded,
+                  label: 'Callsheet',
                   color: const Color(0xFFF59E0B),
-                  onTap: () {
-                    Navigator.of(
-                      context,
-                    ).push(MaterialPageRoute(builder: (_) => const CallsheetDataEntryPage()));
+                  onTap: () async {
+                    customersAsync.when(
+                      data: (customers) async {
+                        if (customers.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No customers with order history found.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        Customer? selectedCustomer;
+
+                        await showDialog(
+                          context: context,
+                          builder: (context) => CustomerPickerModal(
+                            customers: customers,
+                            selectedCustomer: null,
+                            onCustomerSelected: (customer) {
+                              selectedCustomer = customer;
+                            },
+                          ),
+                        );
+
+                        if (selectedCustomer != null && context.mounted) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CallsheetDataEntryPage(
+                                customer: selectedCustomer!,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      error: (err, stack) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $err')));
+                      },
+                      loading: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Loading customers...')),
+                        );
+                      },
+                    );
                   },
                 ),
               ),

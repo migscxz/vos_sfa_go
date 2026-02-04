@@ -23,9 +23,8 @@ class DatabaseManager {
   static const String dbTasks = dbMain;
 
   // 🔺 bump version when you add/rename tables/columns
-  // Version 5: user compatibility columns
-  // Version 6: unit.sort_order migration (from legacy unit."order")
-  static const int _dbVersion = 6;
+  // Version 7: Added sales_order_attachment
+  static const int _dbVersion = 8;
 
   Database? _db;
 
@@ -102,6 +101,7 @@ class DatabaseManager {
     await db.execute(TableSchemas.unitTable);
     await db.execute(TableSchemas.salesOrderTable);
     await db.execute(TableSchemas.salesOrderDetailsTable);
+    await db.execute(TableSchemas.salesOrderAttachmentTable); // ✅ NEW
     await db.execute(TableSchemas.salesInvoiceTable);
     await db.execute(TableSchemas.salesInvoiceDetailsTable);
     await db.execute(TableSchemas.salesReturnTable);
@@ -115,7 +115,11 @@ class DatabaseManager {
   }
 
   // ✅ Real migrations (ALTER TABLE) for existing installs
-  Future<void> _runMigrations(Database db, int oldVersion, int newVersion) async {
+  Future<void> _runMigrations(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     // v5 migrations: user compatibility columns
     if (oldVersion < 5) {
       await _addColumnIfMissing(db, 'user', 'user_dateOfHire', 'TEXT');
@@ -140,16 +144,26 @@ class DatabaseManager {
       }
     }
 
-    // Add future migrations here:
-    // if (oldVersion < 7) { ... }
+    // v7 migrations: sales_order_attachment
+    if (oldVersion < 7) {
+      await db.execute(TableSchemas.salesOrderAttachmentTable);
+    }
+
+    // v8 migrations: Fix sales_return schema (FK mismatch)
+    if (oldVersion < 8) {
+      await db.execute('DROP TABLE IF EXISTS sales_return_details');
+      await db.execute('DROP TABLE IF EXISTS sales_return');
+      await db.execute(TableSchemas.salesReturnTable);
+      await db.execute(TableSchemas.salesReturnDetailsTable);
+    }
   }
 
   Future<void> _addColumnIfMissing(
-      Database db,
-      String table,
-      String column,
-      String type,
-      ) async {
+    Database db,
+    String table,
+    String column,
+    String type,
+  ) async {
     final cols = await _getColumns(db, table);
     if (cols.contains(column)) return;
 

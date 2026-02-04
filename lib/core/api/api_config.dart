@@ -16,10 +16,12 @@ class ApiConfig {
   static const String department = "/department";
   static const String products = "/products";
   static const String suppliers = "/suppliers";
-  static const String dailyActionPlanAttachment = "/daily_action_plan_attachment";
+  static const String dailyActionPlanAttachment =
+      "/daily_action_plan_attachment";
 
   // ✅ new
   static const String customerSalesmen = "/customer_salesmen";
   static const String productPerSupplier = "/product_per_supplier";
   static const String units = "/units";
+  static const String salesOrderAttachment = "/sales_order_attachment";
 }

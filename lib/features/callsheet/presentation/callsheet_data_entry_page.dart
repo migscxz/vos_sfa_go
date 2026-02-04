@@ -1,30 +1,126 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:horizontal_data_table/horizontal_data_table.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+
 import '../../../../core/theme/app_colors.dart';
+import '../../../../data/models/customer_model.dart';
+import '../../../../providers/auth_provider.dart';
+import '../../orders/data/repositories/order_repository.dart';
+import 'callsheet_capture_page.dart';
 
 class CallsheetDataEntryPage extends ConsumerStatefulWidget {
-  const CallsheetDataEntryPage({super.key});
+  final Customer customer;
+
+  const CallsheetDataEntryPage({super.key, required this.customer});
 
   @override
-  ConsumerState<CallsheetDataEntryPage> createState() => _CallsheetDataEntryPageState();
+  ConsumerState<CallsheetDataEntryPage> createState() =>
+      _CallsheetDataEntryPageState();
 }
 
-class _CallsheetDataEntryPageState extends ConsumerState<CallsheetDataEntryPage> {
+class _CallsheetDataEntryPageState
+    extends ConsumerState<CallsheetDataEntryPage> {
   // --- A4 LANDSCAPE CONFIGURATION (~1123px total width) ---
-  // Adjusted widths to closer match the visual proportion in the image
-  static const double leftColWidth = 200.0; // Product Description is wider
-  static const double stdColWidth = 80.0;   // Price, Suggested, Barcode, Inv
-  static const double daySubColWidth = 40.0; // Inv / Last Order
-  static const double dayGroupWidth = daySubColWidth * 2;
-  static const int numberOfDays = 8;
+  static const double leftColWidth = 180.0;
+  static const double stdColWidth = 70.0;
+  static const double dayColWidth = 60.0;
 
-  // Generate empty rows to match the "blank form" look of the image
-  final List<String> _products = List.generate(40, (index) => "");
+  // State
+  bool _isLoading = true;
+  List<String> _orderDates = [];
+  List<Map<String, dynamic>> _productsData = [];
+  final TextEditingController _poNumberCtrl = TextEditingController();
+  final OrderRepository _orderRepo = OrderRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await _orderRepo.getCallsheetData(widget.customer.code);
+      if (mounted) {
+        setState(() {
+          _orderDates = List<String>.from(data['dates'] ?? []);
+          _productsData = List<Map<String, dynamic>>.from(
+            data['products'] ?? [],
+          );
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading callsheet data: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleUpload() async {
+    // 1. Check PO Number
+    if (_poNumberCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a PO Number first.')),
+      );
+      return;
+    }
+
+    // 2. Capture Image
+    final imagePath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const CallsheetCapturePage()),
+    );
+
+    if (imagePath == null) return;
+
+    // 3. Save
+    try {
+      final user = ref.read(authProvider).user;
+      final userId = user?.userId ?? 0;
+
+      // Rename file to [OrderNo].jpg handling
+      final orderNo = _poNumberCtrl.text
+          .trim(); // Using PO as identifier for now
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = '$orderNo.jpg';
+      final newPath = p.join(appDir.path, fileName);
+
+      await File(imagePath).copy(newPath);
+
+      // Save info to DB
+      await _orderRepo.saveCallsheetAttachment(
+        salesOrderId: null, // We don't have a structured sales_order yet
+        attachmentPath: newPath,
+        createdBy: userId,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Callsheet Uploaded Successfully!')),
+        );
+        Navigator.of(context).pop(); // Go back to dashboard?
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error uploading: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Dynamic Columns calculation
+    // Left + Price + Dates
+    final rightWidth = stdColWidth + (_orderDates.length * dayColWidth);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -34,23 +130,79 @@ class _CallsheetDataEntryPageState extends ConsumerState<CallsheetDataEntryPage>
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ready for PDF Generation')),
-              );
-            },
-          )
+          // Upload Button
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: ElevatedButton.icon(
+              onPressed: _handleUpload,
+              icon: const Icon(Icons.upload_file, size: 18),
+              label: const Text("SAVE & UPLOAD"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             _buildTopInfoSection(theme),
-            // The table header in the image acts as the divider, so we don't need a separate one if the table starts immediately.
+
+            // PO Number Field
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Text(
+                    'PO Number: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _poNumberCtrl,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter PO Number or Scan...',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             Expanded(
-              child: _buildTable(theme),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _productsData.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No historical data found for this customer.',
+                      ),
+                    )
+                  : HorizontalDataTable(
+                      leftHandSideColumnWidth: leftColWidth,
+                      rightHandSideColumnWidth: rightWidth,
+                      isFixedHeader: true,
+                      headerWidgets: _buildHeaderWidgets(),
+                      leftSideItemBuilder: _buildLeftColumnItem,
+                      rightSideItemBuilder: _buildRightColumnItems,
+                      itemCount: _productsData.length,
+                      rowSeparatorWidget: const Divider(
+                        color: Colors.black,
+                        height: 1.0,
+                        thickness: 1.0,
+                      ),
+                      leftHandSideColBackgroundColor: Colors.white,
+                      rightHandSideColBackgroundColor: Colors.white,
+                    ),
             ),
           ],
         ),
@@ -64,26 +216,24 @@ class _CallsheetDataEntryPageState extends ConsumerState<CallsheetDataEntryPage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left Side: Customer Info
           Expanded(
             flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildLabelField("CUSTOMER NAME:", ""),
+                _buildLabelField("CUSTOMER NAME:", widget.customer.name),
                 const SizedBox(height: 4),
-                _buildLabelField("ADDRESS:", ""),
+                _buildLabelField("CODE:", widget.customer.code),
               ],
             ),
           ),
-          // Right Side: Logo / Header Area
           Expanded(
             flex: 1,
             child: Container(
               height: 60,
               alignment: Alignment.center,
               child: const Text(
-                "LOGO / HEADER AREA",
+                "CALLSHEET / HISTORY",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
@@ -106,8 +256,10 @@ class _CallsheetDataEntryPageState extends ConsumerState<CallsheetDataEntryPage>
         Expanded(
           child: Container(
             height: 24,
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.black, width: 0.5)),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.black, width: 0.5),
+              ),
             ),
             alignment: Alignment.centerLeft,
             child: Text(value, style: const TextStyle(fontSize: 13)),
@@ -117,175 +269,129 @@ class _CallsheetDataEntryPageState extends ConsumerState<CallsheetDataEntryPage>
     );
   }
 
-  Widget _buildTable(ThemeData theme) {
-    return HorizontalDataTable(
-      leftHandSideColumnWidth: leftColWidth,
-      rightHandSideColumnWidth: (stdColWidth * 4) + (dayGroupWidth * numberOfDays),
-      isFixedHeader: true,
-      headerWidgets: _buildHeaderWidgets(),
-      leftSideItemBuilder: _buildLeftColumnItem,
-      rightSideItemBuilder: _buildRightColumnItems,
-      itemCount: _products.length,
-      rowSeparatorWidget: const Divider(color: Colors.black, height: 1.0, thickness: 1.0),
-      leftHandSideColBackgroundColor: Colors.white,
-      rightHandSideColBackgroundColor: Colors.white,
-      verticalScrollbarStyle: const ScrollbarStyle(
-        thumbColor: Colors.grey,
-        isAlwaysShown: true,
-        thickness: 4.0,
-        radius: Radius.circular(5.0),
-      ),
-      horizontalScrollbarStyle: const ScrollbarStyle(
-        thumbColor: Colors.grey,
-        isAlwaysShown: true,
-        thickness: 4.0,
-        radius: Radius.circular(5.0),
-      ),
-    );
-  }
-
   List<Widget> _buildHeaderWidgets() {
-    // The image has headers with borders.
-    var leftHeader = _buildHeaderCell("PRODUCT DESCRIPTION", leftColWidth, height: 50, alignment: Alignment.centerLeft);
+    var leftHeader = _buildHeaderCell(
+      "PRODUCT",
+      leftColWidth,
+      alignment: Alignment.centerLeft,
+    );
 
-    List<Widget> rightHeaders = [
-      _buildHeaderCell("unit price", stdColWidth, height: 50),
-      _buildHeaderCell("suggested order", stdColWidth, height: 50),
-      _buildHeaderCell("barcode", stdColWidth, height: 50),
-      _buildHeaderCell("inventory", stdColWidth, height: 50),
-    ];
+    List<Widget> rightHeaders = [_buildHeaderCell("PRICE", stdColWidth)];
 
-    for (int i = 1; i <= numberOfDays; i++) {
-      rightHeaders.add(_buildDayGroupHeader("DAY $i"));
+    for (String date in _orderDates) {
+      // Format 2023-10-25 -> 10/25
+      String displayDate = date;
+      try {
+        final dt = DateTime.parse(date);
+        displayDate = DateFormat('MM/dd').format(dt);
+      } catch (_) {}
+
+      rightHeaders.add(_buildHeaderCell(displayDate, dayColWidth));
     }
 
     return [leftHeader, ...rightHeaders];
   }
 
-  Widget _buildHeaderCell(String text, double width, {double height = 50, Alignment alignment = Alignment.center}) {
+  Widget _buildHeaderCell(
+    String text,
+    double width, {
+    Alignment alignment = Alignment.center,
+  }) {
     return Container(
       width: width,
-      height: height,
+      height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          right: const BorderSide(color: Colors.black, width: 1),
-          bottom: const BorderSide(color: Colors.black, width: 1),
-          top: const BorderSide(color: Colors.black, width: 1),
-          // Left border handled by previous cell or container
+          right: BorderSide(color: Colors.black, width: 1),
+          bottom: BorderSide(color: Colors.black, width: 1),
+          top: BorderSide(color: Colors.black, width: 1),
         ),
       ),
       alignment: alignment,
       child: Text(
-        text.toUpperCase(), // Image has headers in uppercase (mostly)
+        text,
+        maxLines: 2,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black),
-      ),
-    );
-  }
-
-  Widget _buildDayGroupHeader(String title) {
-    return Container(
-      width: dayGroupWidth,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          right: const BorderSide(color: Colors.black, width: 1),
-          bottom: const BorderSide(color: Colors.black, width: 1),
-          top: const BorderSide(color: Colors.black, width: 1),
-        ),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              alignment: Alignment.center,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.black, width: 1)),
-              ),
-              child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-            ),
-          ),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      border: Border(right: BorderSide(color: Colors.black, width: 1)),
-                    ),
-                    child: const Text("Inv", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                Expanded(
-                  child: Container(
-                    alignment: Alignment.center,
-                    child: const Text("Last Order", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
       ),
     );
   }
 
   Widget _buildLeftColumnItem(BuildContext context, int index) {
+    final item = _productsData[index];
     return Container(
       width: leftColWidth,
-      height: 30, // Reduced height to match dense spreadsheet look
+      height: 30,
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
         border: Border(
           right: BorderSide(color: Colors.black, width: 1),
           bottom: BorderSide(color: Colors.black, width: 1),
-          left: BorderSide(color: Colors.black, width: 1), // Left column needs left border
+          left: BorderSide(color: Colors.black, width: 1),
         ),
       ),
       child: Text(
-        _products[index],
+        item['name'] ?? '',
         style: const TextStyle(fontSize: 11),
-        maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
   Widget _buildRightColumnItems(BuildContext context, int index) {
-    List<Widget> cells = [
-      _buildDataCell(stdColWidth, ""), // Unit Price
-      _buildDataCell(stdColWidth, ""), // Suggested
-      _buildDataCell(stdColWidth, ""), // Barcode
-      _buildDataCell(stdColWidth, ""), // Inventory
-    ];
+    final item = _productsData[index];
+    final history = item['history'] as Map<String, dynamic>? ?? {};
 
-    for (int i = 0; i < numberOfDays; i++) {
-      cells.add(_buildDataCell(daySubColWidth, "")); // Inv
-      cells.add(_buildDataCell(daySubColWidth, "")); // Last Order
+    List<Widget> cells = [];
+
+    // Price
+    cells.add(
+      Container(
+        width: stdColWidth,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          border: Border(
+            right: BorderSide(color: Colors.black, width: 1),
+            bottom: BorderSide(color: Colors.black, width: 1),
+          ),
+        ),
+        child: Text(
+          (item['price'] as double).toStringAsFixed(2),
+          style: const TextStyle(fontSize: 11),
+        ),
+      ),
+    );
+
+    // Dates
+    for (String date in _orderDates) {
+      final qty = history[date];
+      cells.add(
+        Container(
+          width: dayColWidth,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            border: Border(
+              right: BorderSide(color: Colors.black, width: 1),
+              bottom: BorderSide(color: Colors.black, width: 1),
+            ),
+          ),
+          child: Text(
+            qty != null ? qty.toStringAsFixed(0) : '-',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: qty != null ? FontWeight.bold : FontWeight.normal,
+              color: qty != null ? Colors.black : Colors.grey[300],
+            ),
+          ),
+        ),
+      );
     }
 
     return Row(children: cells);
-  }
-
-  Widget _buildDataCell(double width, String text) {
-    return Container(
-      width: width,
-      height: 30, // Match row height
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          right: BorderSide(color: Colors.black, width: 1),
-          bottom: BorderSide(color: Colors.black, width: 1),
-        ),
-      ),
-      // Since it's a blank form for now, we just keep it empty or put a TextField if editable
-      child: const SizedBox(),
-    );
   }
 }
