@@ -77,7 +77,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         createdAt: widget.orderTemplate.createdAt,
         totalAmount: _grandTotal,
         netAmount: _grandTotal,
-        status: widget.orderTemplate.status,
+        status: 'For Approval', // ✅ Set status
+        forApprovalAt: now.toIso8601String(), // ✅ Set approval date
         type: widget.orderTemplate.type,
         supplier: widget.orderTemplate.supplier,
         priceType: widget.orderTemplate.priceType,

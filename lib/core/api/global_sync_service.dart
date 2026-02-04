@@ -152,7 +152,14 @@ class GlobalSyncService {
     final db = await _dbManager.getDatabase(DatabaseManager.dbSales);
 
     try {
-      // 1. Get unsynced orders
+      // 0. Fix any existing null allocated_amount values for ALL pending orders
+      // This ensures any old orders without allocated_amount get updated
+      await db.execute(
+        'UPDATE sales_order SET allocated_amount = total_amount WHERE allocated_amount IS NULL AND total_amount IS NOT NULL AND is_synced = 0',
+      );
+      print('Fixed allocated_amount for pending orders');
+
+      // 1. Get unsynced orders for this salesman
       final pendingOrders = await db.query(
         'sales_order',
         where: 'is_synced = 0 AND salesman_id = ?',
@@ -221,22 +228,37 @@ class GlobalSyncService {
         if (headerPayload['allocated_amount'] == null) {
           // Default to total_amount if available, else 0.0
           headerPayload['allocated_amount'] =
-              headerPayload['total_amount'] ?? 0.0;
+              (headerPayload['total_amount'] as num?)?.toDouble() ?? 0.0;
         }
+        // Ensure allocated_amount is always a number (not a string)
+        headerPayload['allocated_amount'] =
+            (headerPayload['allocated_amount'] as num?)?.toDouble() ?? 0.0;
+
         if (headerPayload['sales_type'] == null) {
           headerPayload['sales_type'] = 1; // Default Sales Type
         }
+        // Ensure sales_type is always a number
+        headerPayload['sales_type'] =
+            (headerPayload['sales_type'] as num?)?.toInt() ?? 1;
+
         if (headerPayload['receipt_type'] == null) {
           headerPayload['receipt_type'] = 1; // Default Receipt Type
         }
+        // Ensure receipt_type is always a number
+        headerPayload['receipt_type'] =
+            (headerPayload['receipt_type'] as num?)?.toInt() ?? 1;
+
         if (headerPayload['discount_amount'] == null) {
           headerPayload['discount_amount'] = 0.0;
         }
+        // Ensure discount_amount is always a number
+        headerPayload['discount_amount'] =
+            (headerPayload['discount_amount'] as num?)?.toDouble() ?? 0.0;
 
         // Remove keys with null values (Directus/API best practice)
         headerPayload.removeWhere((key, value) => value == null);
 
-        // Sanitize first
+        // Sanitize for API
         final cleanHeader = _sanitizeForSqlite(headerPayload);
 
         // Debug: Print the payload to verify allocated_amount is there
@@ -271,6 +293,14 @@ class GlobalSyncService {
               // Remove calculated/UI fields if server calculates them
               // detailPayload.remove('created_date');
               // detailPayload.remove('modified_date');
+
+              // FIX: Remove invalid foreign key '0' for discount_type
+              if (detailPayload['discount_type'] == 0) {
+                detailPayload.remove('discount_type');
+              }
+
+              // Remove fields with null values (to avoid foreign key errors)
+              detailPayload.removeWhere((key, value) => value == null);
 
               // Sanitize
               final cleanDetail = _sanitizeForSqlite(detailPayload);

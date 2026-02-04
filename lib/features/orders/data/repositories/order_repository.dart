@@ -45,6 +45,8 @@ class OrderRepository {
         'net_amount': item.total,
         'created_date': order.createdAt.toIso8601String(),
         'remarks': '',
+        // Note: discount_type and other nullable fields not included
+        // to avoid foreign key errors when syncing to Directus
       });
     }
     await batch.commit(noResult: true);
@@ -140,10 +142,25 @@ class OrderRepository {
         await db.execute('ALTER TABLE sales_order ADD COLUMN remarks TEXT');
       }
       if (!existingColumns.contains('salesman_id')) {
-        await db.execute('ALTER TABLE sales_order ADD COLUMN salesman_id INTEGER');
+        await db.execute(
+          'ALTER TABLE sales_order ADD COLUMN salesman_id INTEGER',
+        );
       }
       if (!existingColumns.contains('is_synced')) {
-        await db.execute('ALTER TABLE sales_order ADD COLUMN is_synced INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE sales_order ADD COLUMN is_synced INTEGER DEFAULT 0',
+        );
+      }
+      // Ensure allocated_amount exists (for orders created before this fix)
+      if (!existingColumns.contains('allocated_amount')) {
+        await db.execute(
+          'ALTER TABLE sales_order ADD COLUMN allocated_amount REAL',
+        );
+      } else {
+        // Update existing null values to total_amount
+        await db.execute(
+          'UPDATE sales_order SET allocated_amount = total_amount WHERE allocated_amount IS NULL AND total_amount IS NOT NULL',
+        );
       }
     } catch (e) {
       // Ignore migration errors
@@ -161,7 +178,11 @@ class OrderRepository {
   Future<OrderModel?> getOrderById(int orderId) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 
-    final rows = await db.query('sales_order', where: 'order_id = ?', whereArgs: [orderId]);
+    final rows = await db.query(
+      'sales_order',
+      where: 'order_id = ?',
+      whereArgs: [orderId],
+    );
 
     if (rows.isEmpty) return null;
 
@@ -171,7 +192,11 @@ class OrderRepository {
   Future<List<CartItem>> getOrderItems(int orderId) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 
-    final rows = await db.query('sales_order_details', where: 'order_id = ?', whereArgs: [orderId]);
+    final rows = await db.query(
+      'sales_order_details',
+      where: 'order_id = ?',
+      whereArgs: [orderId],
+    );
 
     return rows.map((row) {
       // This is a simplified mapping - in a real app you'd need to join with product tables

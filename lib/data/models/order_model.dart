@@ -34,6 +34,7 @@ class OrderModel {
   final double netAmount;
   final String status;
   final int isSynced; // 0 = false, 1 = true
+  final String? forApprovalAt;
 
   // UI fields
   final OrderType type;
@@ -85,6 +86,7 @@ class OrderModel {
     required this.netAmount,
     required this.status,
     this.isSynced = 0,
+    this.forApprovalAt,
 
     this.type = OrderType.manual,
     this.supplier,
@@ -116,18 +118,23 @@ class OrderModel {
       poNo: map['po_no']?.toString(),
 
       // Prefer explicit name if present; otherwise fallback to code.
-      customerName: (map['customer_name'] ?? map['customer_code'] ?? 'Unknown').toString(),
+      customerName: (map['customer_name'] ?? map['customer_code'] ?? 'Unknown')
+          .toString(),
       customerCode: map['customer_code']?.toString(),
       salesmanId: (map['salesman_id'] as num?)?.toInt(),
       supplierId: (map['supplier_id'] as num?)?.toInt(),
 
-      orderDate: DateTime.tryParse((map['order_date'] ?? '').toString()) ?? DateTime.now(),
+      orderDate:
+          DateTime.tryParse((map['order_date'] ?? '').toString()) ??
+          DateTime.now(),
       deliveryDate: map['delivery_date']?.toString(),
       paymentTerms: map['payment_terms']?.toString(),
       remarks: map['remarks']?.toString(),
 
       createdAt:
-          DateTime.tryParse((map['created_date'] ?? map['created_at'] ?? '').toString()) ??
+          DateTime.tryParse(
+            (map['created_date'] ?? map['created_at'] ?? '').toString(),
+          ) ??
           DateTime.now(),
 
       totalAmount:
@@ -139,6 +146,7 @@ class OrderModel {
 
       status: (map['order_status'] ?? map['status'] ?? 'Pending').toString(),
       isSynced: (map['is_synced'] as num?)?.toInt() ?? 0,
+      forApprovalAt: map['for_approval_at']?.toString(),
 
       type: OrderTypeDb.fromDb(map['order_type']?.toString()),
 
@@ -179,10 +187,13 @@ class OrderModel {
 
       'created_date': createdAt.toIso8601String(),
       'total_amount': totalAmount,
+      'allocated_amount':
+          totalAmount, // Set allocated_amount equal to total_amount
       'discount_amount': discountAmount,
       'net_amount': netAmount,
       'order_status': status,
       'is_synced': isSynced,
+      'for_approval_at': forApprovalAt,
 
       'order_type': type.dbValue,
 
