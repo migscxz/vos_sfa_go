@@ -1,18 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:horizontal_data_table/horizontal_data_table.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/customer_model.dart';
-import '../../../../providers/auth_provider.dart';
 import '../../orders/data/repositories/order_repository.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
-import 'callsheet_capture_page.dart';
+import '../../../../core/services/file_api_service.dart';
+import '../../../../core/services/pdf_generator_service.dart';
 
 class CallsheetDataEntryPage extends ConsumerStatefulWidget {
   final Customer customer;
@@ -65,53 +61,39 @@ class _CallsheetDataEntryPageState
   }
 
   Future<void> _handleUpload() async {
-    // 1. Check PO Number
-    // if (_poNumberCtrl.text.trim().isEmpty) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text('Please enter a PO Number first.')),
-    //   );
-    //   return;
-    // }
+    setState(() => _isLoading = true);
 
-    // 2. Capture Image
-    final imagePath = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const CallsheetCapturePage()),
-    );
-
-    if (imagePath == null) return;
-
-    // 3. Save
     try {
-      final user = ref.read(authProvider).user;
-      final userId = user?.userId ?? 0;
-
-      // Rename file to [OrderNo].jpg handling
-      // final orderNo = _poNumberCtrl.text.trim();
-      // Using Timestamp since PO is hidden
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final appDir = await getApplicationDocumentsDirectory();
-      final newPath = p.join(appDir.path, fileName);
-
-      await File(imagePath).copy(newPath);
-
-      // Save info to DB
-      await _orderRepo.saveCallsheetAttachment(
-        salesOrderId: null, // We don't have a structured sales_order yet
-        attachmentPath: newPath,
-        createdBy: userId,
+      // 1. Generate PDF
+      final pdfFile = await PdfGeneratorService().generateCallsheetPdf(
+        customerName: widget.customer.name,
+        customerCode: widget.customer.code,
+        dates: _orderDates,
+        products: _productsData,
       );
 
+      // 2. Upload PDF
+      await FileApiService().uploadFile(pdfFile);
+
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Callsheet Uploaded Successfully!')),
+          const SnackBar(
+            content: Text('Callsheet Saved & Uploaded Successfully!'),
+            backgroundColor: Colors.green,
+          ),
         );
-        Navigator.of(context).pop(); // Go back to dashboard?
+        // Optional: clear cache or pop if needed? user just said remove photo page
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error uploading: $e')));
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
