@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -11,7 +11,9 @@ class PdfGeneratorService {
     required String customerCode,
     required List<String> dates,
     required List<Map<String, dynamic>> products,
+    required String fileName,
   }) async {
+    print("Generating PDF with name: $fileName");
     final pdf = pw.Document();
 
     // Define format
@@ -118,6 +120,17 @@ class PdfGeneratorService {
       return pw.TableRow(children: rowCells);
     }).toList();
 
+    // Column Widths
+    final Map<int, pw.TableColumnWidth> columnWidths = {
+      0: const pw.FixedColumnWidth(160), // Product Name
+      1: const pw.FixedColumnWidth(60), // Price
+    };
+
+    // Add fixed width for each date column to avoid unbounded errors with Expanded
+    for (int i = 0; i < dates.length; i++) {
+      columnWidths[2 + i] = const pw.FixedColumnWidth(70);
+    }
+
     // Generate
     pdf.addPage(
       pw.MultiPage(
@@ -185,11 +198,7 @@ class PdfGeneratorService {
             // Table
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(160), // Product Name
-                1: const pw.FixedColumnWidth(60), // Price
-                // Dates auto-sized or fixed
-              },
+              columnWidths: columnWidths,
               children: [
                 // Header Row
                 pw.TableRow(
@@ -229,10 +238,9 @@ class PdfGeneratorService {
     );
 
     // Save File
-    final output = await getTemporaryDirectory();
-    final file = File(
-      "${output.path}/callsheet_${DateTime.now().millisecondsSinceEpoch}.pdf",
-    );
+    final output = await getApplicationDocumentsDirectory();
+    final file = File("${output.path}/$fileName");
+    print("Saving PDF to: ${file.path}");
     await file.writeAsBytes(await pdf.save());
 
     return file;

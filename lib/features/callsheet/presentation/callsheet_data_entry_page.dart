@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:horizontal_data_table/horizontal_data_table.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/customer_model.dart';
-import '../../orders/data/repositories/order_repository.dart';
+import 'package:vos_sfa_go/providers/auth_provider.dart';
+import 'package:vos_sfa_go/features/orders/data/repositories/order_repository.dart';
 import 'package:vos_sfa_go/features/orders/presentation/order_form.dart';
-import '../../../../core/services/file_api_service.dart';
 import '../../../../core/services/pdf_generator_service.dart';
 
 class CallsheetDataEntryPage extends ConsumerStatefulWidget {
@@ -64,33 +65,54 @@ class _CallsheetDataEntryPageState
     setState(() => _isLoading = true);
 
     try {
-      // 1. Generate PDF
+      final authState = ref.read(authProvider);
+      final salesmanId = authState.salesman?.id;
+      final userId = authState.user?.userId ?? 0;
+
+      // 1. Generate SO Number
+      final now = DateTime.now();
+      final soNumber = 'SO-${DateFormat('yyyyMMddHHmmss').format(now)}';
+      final fileName = '$soNumber.pdf';
+
+      // 2. Generate PDF
       final pdfFile = await PdfGeneratorService().generateCallsheetPdf(
         customerName: widget.customer.name,
         customerCode: widget.customer.code,
         dates: _orderDates,
         products: _productsData,
+        fileName: fileName,
       );
 
-      // 2. Upload PDF
-      await FileApiService().uploadFile(pdfFile);
+      // 3. Upload PDF - REMOVED for Offline First
+      // await FileApiService().uploadFile(pdfFile);
+
+      // 4. Save Attachment Metadata (is_synced default 0)
+      // Use the actual filename from the saved file to ensure consistency
+      final actualFileName = p.basename(pdfFile.path);
+
+      await OrderRepository().saveCallsheetAttachment(
+        salesmanId: salesmanId,
+        customerCode: widget.customer.code,
+        attachmentName: actualFileName,
+        salesOrderNo: soNumber,
+        createdBy: userId,
+      );
 
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Callsheet Saved & Uploaded Successfully!'),
+          SnackBar(
+            content: Text('Saved Locally! Sync to Upload. SO: $soNumber'),
             backgroundColor: Colors.green,
           ),
         );
-        // Optional: clear cache or pop if needed? user just said remove photo page
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error uploading: $e'),
+            content: Text('Error saving: $e'),
             backgroundColor: Colors.red,
           ),
         );

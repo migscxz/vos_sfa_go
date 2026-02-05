@@ -314,21 +314,120 @@ class OrderRepository {
   }
 
   Future<void> saveCallsheetAttachment({
-    required int? salesOrderId,
-    required String attachmentPath,
+    required int? salesmanId,
+    required String customerCode,
+    required String attachmentName,
+    required String salesOrderNo,
     required int createdBy,
   }) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
-    final now = DateTime.now().toIso8601String();
 
+    // 1. Ensure table exists
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sales_order_attachment (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        salesman_id INTEGER,
+        created_by INTEGER,
+        customer_code TEXT,
+        attachment_name TEXT,
+        sales_order_no TEXT,
+        created_date TEXT,
+        is_synced INTEGER DEFAULT 0,
+        file_id TEXT
+      )
+    ''');
+
+    // 2. Migration: Ensure all columns exist (in case table was created with fewer columns)
+    try {
+      final List<Map<String, dynamic>> columns = await db.rawQuery(
+        'PRAGMA table_info(sales_order_attachment)',
+      );
+      final existingColumns = columns.map((c) => c['name'] as String).toSet();
+
+      if (!existingColumns.contains('salesman_id')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN salesman_id INTEGER',
+        );
+      }
+      if (!existingColumns.contains('customer_code')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN customer_code TEXT',
+        );
+      }
+      if (!existingColumns.contains('attachment_name')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN attachment_name TEXT',
+        );
+      }
+      if (!existingColumns.contains('sales_order_no')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN sales_order_no TEXT',
+        );
+      }
+      if (!existingColumns.contains('created_by')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN created_by INTEGER',
+        );
+      }
+      if (!existingColumns.contains('created_date')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN created_date TEXT',
+        );
+      }
+      if (!existingColumns.contains('is_synced')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN is_synced INTEGER DEFAULT 0',
+        );
+      }
+      if (!existingColumns.contains('file_id')) {
+        await db.execute(
+          'ALTER TABLE sales_order_attachment ADD COLUMN file_id TEXT',
+        );
+      }
+    } catch (e) {
+      // Ignore errors if columns already exist or other harmless SQL issues
+      // logging might be useful but sticking to silent resilience for now
+    }
+
+    // 3. Insert Record
     await db.insert('sales_order_attachment', {
-      'sales_order_id': salesOrderId,
-      'attachment': attachmentPath,
+      'salesman_id': salesmanId,
       'created_by': createdBy,
-      'created_date': now,
-      'updated_by': createdBy,
-      'updated_date': now,
-      'is_synced': 0,
+      'customer_code': customerCode,
+      'attachment_name': attachmentName,
+      'sales_order_no': salesOrderNo,
+      'created_date': DateTime.now().toIso8601String(),
+      'is_synced': 0, // Explicitly set unsynced
     });
+  }
+
+  Future<List<Map<String, dynamic>>> getUnsyncedAttachments() async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    // Ensure table exists (in case getUnsynced called before save)
+    // Actually safe to just query, if not exists it throws, but we usually ensure creation on save.
+    // For safety, we can wrap in try catch or ensure creation here too, but lazy approach:
+    try {
+      return await db.query(
+        'sales_order_attachment',
+        where: 'is_synced = 0 OR is_synced IS NULL',
+      );
+    } catch (e) {
+      return []; // Table might not exist yet
+    }
+  }
+
+  Future<void> markAttachmentAsSynced(int id, {String? fileId}) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    final Map<String, dynamic> updates = {'is_synced': 1};
+    if (fileId != null) {
+      updates['file_id'] = fileId;
+    }
+
+    await db.update(
+      'sales_order_attachment',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 }
