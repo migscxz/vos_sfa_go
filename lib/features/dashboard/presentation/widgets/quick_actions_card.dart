@@ -89,52 +89,10 @@ class QuickActionsCard extends ConsumerWidget {
                   label: 'Monitor',
                   color: const Color(0xFF10B981),
                   onTap: () {
-                    customersAsync.when(
-                      data: (customers) async {
-                        if (customers.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'No customers with order history found.',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        Customer? selectedCustomer;
-
-                        await showDialog(
-                          context: context,
-                          builder: (context) => CustomerPickerModal(
-                            customers: customers,
-                            selectedCustomer: null,
-                            onCustomerSelected: (customer) {
-                              selectedCustomer = customer;
-                            },
-                          ),
-                        );
-
-                        if (selectedCustomer != null && context.mounted) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => MonitoringOrderListPage(
-                                customer: selectedCustomer!,
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      error: (err, stack) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $err')));
-                      },
-                      loading: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Loading customers...')),
-                        );
-                      },
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MonitoringOrderListPage(),
+                      ),
                     );
                   },
                 ),

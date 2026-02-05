@@ -49,7 +49,7 @@ class OrderRepository {
     // Insert Header
     final headerRow = order.toSqlite();
     headerRow.remove('id');
-    headerRow.remove('customer_name');
+    // headerRow.remove('customer_name'); // Keep customer_name
     headerRow.remove('supplier');
     headerRow.remove('order_type');
     headerRow.remove('product');
