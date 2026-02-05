@@ -589,73 +589,99 @@ class _OrderListModalState extends State<_OrderListModal> {
                         style: TextStyle(color: Colors.grey[400]),
                       ),
                     )
-                  : ListView.separated(
+                  : ListView.builder(
                       itemCount: _filteredOrders.length,
-                      separatorBuilder: (context, index) => const Divider(),
                       itemBuilder: (context, index) {
                         final order = _filteredOrders[index];
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 4,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: Colors.grey.withOpacity(0.2),
+                            ),
                           ),
-                          title: Row(
-                            children: [
-                              Text(
-                                order.orderNo.isEmpty
-                                    ? "Order #${order.id}"
-                                    : order.orderNo,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (order.poNo != null && order.poNo!.isNotEmpty)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 12),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    "PO: ${order.poNo}",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey[800],
-                                      fontWeight: FontWeight.w500,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        order.orderNo.isEmpty
+                                            ? "Order #${order.id}"
+                                            : order.orderNo,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Text(
+                                      NumberFormat.currency(
+                                        symbol: '₱',
+                                      ).format(order.totalAmount),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                            ],
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              DateFormat(
-                                'MMM dd, yyyy • h:mm a',
-                              ).format(order.orderDate),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[600],
-                              ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      DateFormat(
+                                        'MMM dd, yyyy • h:mm a',
+                                      ).format(order.orderDate),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    if (order.poNo != null &&
+                                        order.poNo!.isNotEmpty) ...[
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100],
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          "PO: ${order.poNo}",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey[800],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          trailing: Text(
-                            NumberFormat.currency(
-                              symbol: '₱',
-                            ).format(order.totalAmount),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.green, // Accent color for money
-                            ),
-                          ),
-                          onTap: () {
-                            // Optional: Navigate to detail page if needed
-                          },
                         );
                       },
                     ),
