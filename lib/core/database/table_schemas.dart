@@ -469,4 +469,51 @@ class TableSchemas {
       created_at TEXT
     )
   ''';
+
+  // --- DISCOUNT DB ---
+
+  static const String discountTypeTable = '''
+    CREATE TABLE IF NOT EXISTS discount_type (
+      id INTEGER PRIMARY KEY,
+      discount_type TEXT
+    )
+  ''';
+
+  static const String lineDiscountTable = '''
+    CREATE TABLE IF NOT EXISTS line_discount (
+      id INTEGER PRIMARY KEY,
+      line_discount TEXT,
+      percentage REAL
+    )
+  ''';
+
+  static const String linePerDiscountTypeTable = '''
+    CREATE TABLE IF NOT EXISTS line_per_discount_type (
+      id INTEGER PRIMARY KEY,
+      type_id INTEGER,
+      line_id INTEGER
+    )
+  ''';
+
+  static const String supplierCategoryDiscountPerCustomerTable = '''
+    CREATE TABLE IF NOT EXISTS supplier_category_discount_per_customer (
+      id INTEGER PRIMARY KEY,
+      customer_code TEXT,
+      discount_type INTEGER,
+      supplier_id INTEGER,
+      category_id INTEGER
+    )
+  ''';
+
+  static const String productPerCustomerTable = '''
+    CREATE TABLE IF NOT EXISTS product_per_customer (
+      id INTEGER PRIMARY KEY,
+      customer_code TEXT,
+      product_id INTEGER,
+      discount_type INTEGER,
+      unit_price REAL,
+      date_added TEXT,
+      date_modified TEXT
+    )
+  ''';
 }

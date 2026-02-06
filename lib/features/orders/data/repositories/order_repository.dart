@@ -434,4 +434,27 @@ class OrderRepository {
       whereArgs: [id],
     );
   }
+
+  Future<List<Map<String, dynamic>>> getPendingCallsheetsByCustomer(
+    String customerCode,
+  ) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    // Ensure table exists just in case
+    try {
+      final result = await db.query(
+        'sales_order_attachment',
+        where: 'customer_code = ? AND (is_synced = 0 OR is_synced IS NULL)',
+        whereArgs: [customerCode],
+        orderBy: 'created_date DESC',
+      );
+      return result;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<void> deleteCallsheetAttachment(int id) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+    await db.delete('sales_order_attachment', where: 'id = ?', whereArgs: [id]);
+  }
 }

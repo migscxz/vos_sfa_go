@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:open_file/open_file.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:vos_sfa_go/core/theme/app_colors.dart';
@@ -20,6 +23,7 @@ class _PendingOrdersPageState extends ConsumerState<PendingOrdersPage> {
   Customer? _selectedCustomer;
   bool _isLoading = false;
   List<OrderModel> _pendingOrders = [];
+  List<Map<String, dynamic>> _pendingCallsheets = [];
   final OrderRepository _orderRepository =
       OrderRepository(); // Direct instantiation for now
   List<Customer> _customers = [];
@@ -73,13 +77,17 @@ class _PendingOrdersPageState extends ConsumerState<PendingOrdersPage> {
       final orders = await _orderRepository.getPendingOrdersByCustomer(
         _selectedCustomer!.code,
       );
+      final callsheets = await _orderRepository.getPendingCallsheetsByCustomer(
+        _selectedCustomer!.code,
+      );
       if (mounted) {
         setState(() {
           _pendingOrders = orders;
+          _pendingCallsheets = callsheets;
         });
       }
     } catch (e) {
-      debugPrint('Error loading pending orders: $e');
+      debugPrint('Error loading pending items: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -126,6 +134,85 @@ class _PendingOrdersPageState extends ConsumerState<PendingOrdersPage> {
       ),
     );
     _loadPendingOrders(); // Refresh after return
+  }
+
+  Future<void> _deleteCallsheet(int id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Callsheet'),
+        content: Text('Are you sure you want to delete callsheet $name?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _orderRepository.deleteCallsheetAttachment(id);
+      _loadPendingOrders();
+      // Optionally delete local file if you want, but maybe keeping it is safer
+    }
+  }
+
+  Future<void> _openPdf(String fileName) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}${Platform.pathSeparator}$fileName';
+      final file = File(path);
+
+      if (!await file.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File not found at: $path'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Opening PDF...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+
+      if (Platform.isWindows) {
+        await Process.run('cmd', ['/c', 'start', '', path]);
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        final result = await OpenFile.open(path);
+        debugPrint('Open file result: ${result.type} - ${result.message}');
+        if (result.type != ResultType.done) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not open file: ${result.message}')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error opening PDF: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showCustomerPicker() {
@@ -214,136 +301,240 @@ class _PendingOrdersPageState extends ConsumerState<PendingOrdersPage> {
             ),
           ),
 
-          // Order List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _selectedCustomer == null
-                ? const Center(
-                    child: Text(
-                      'Please select a customer to view pending orders',
-                      style: TextStyle(color: Colors.grey),
+          if (_selectedCustomer == null)
+            const Expanded(
+              child: Center(
+                child: Text(
+                  'Please select a customer to view pending items',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: DefaultTabController(
+                length: 2,
+                child: Column(
+                  children: [
+                    Container(
+                      color: Colors.white,
+                      child: TabBar(
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: Colors.grey,
+                        indicatorColor: AppColors.primary,
+                        tabs: const [
+                          Tab(text: "Pending Orders"),
+                          Tab(text: "Pending Callsheets"),
+                        ],
+                      ),
                     ),
-                  )
-                : _pendingOrders.isEmpty
-                ? const Center(child: Text('No pending orders found'))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _pendingOrders.length,
-                    itemBuilder: (context, index) {
-                      final order = _pendingOrders[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    order.orderNo,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  Text(
-                                    DateFormat(
-                                      'MMM dd, yyyy',
-                                    ).format(order.orderDate),
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.monetization_on,
-                                    size: 16,
-                                    color: Colors.green.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    NumberFormat.currency(
-                                      symbol: '₱',
-                                    ).format(order.totalAmount),
-                                    style: TextStyle(
-                                      color: Colors.green.shade700,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'Unsynced',
-                                      style: TextStyle(
-                                        color: Colors.orange.shade800,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 24),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => _deleteOrder(order),
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 20,
-                                      color: Colors.red,
-                                    ),
-                                    label: const Text(
-                                      'Delete',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _editOrder(order),
-                                    icon: const Icon(Icons.edit, size: 20),
-                                    label: const Text('Edit'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // Tab 1: Orders
+                          _buildOrdersList(),
+                          // Tab 2: Callsheets
+                          _buildCallsheetsList(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOrdersList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_pendingOrders.isEmpty) {
+      return const Center(child: Text('No pending orders found'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _pendingOrders.length,
+      itemBuilder: (context, index) {
+        final order = _pendingOrders[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      order.orderNo,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(order.orderDate),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.monetization_on,
+                      size: 16,
+                      color: Colors.green.shade700,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      NumberFormat.currency(
+                        symbol: '₱',
+                      ).format(order.totalAmount),
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Unsynced',
+                        style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _deleteOrder(order),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: Colors.red,
+                      ),
+                      label: const Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _editOrder(order),
+                      icon: const Icon(Icons.edit, size: 20),
+                      label: const Text('Edit'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCallsheetsList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_pendingCallsheets.isEmpty) {
+      return const Center(child: Text('No pending callsheets found'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _pendingCallsheets.length,
+      itemBuilder: (context, index) {
+        final item = _pendingCallsheets[index];
+        final id = item['id'] as int;
+        final name = item['attachment_name'] as String? ?? 'Unknown PDF';
+        final soNo = item['sales_order_no'] as String? ?? '-';
+        final createdDate = item['created_date'] as String?;
+        final dateStr = createdDate != null
+            ? DateFormat(
+                'MMM dd, yyyy h:mm a',
+              ).format(DateTime.parse(createdDate))
+            : '-';
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            ),
+            title: Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text("SO: $soNo"),
+                Text("Date: $dateStr", style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.open_in_new, color: Colors.blue),
+                  tooltip: "Open PDF",
+                  onPressed: () => _openPdf(name),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: "Delete",
+                  onPressed: () => _deleteCallsheet(id, name),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
