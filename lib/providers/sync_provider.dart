@@ -8,6 +8,8 @@ import 'package:vos_sfa_go/core/services/file_api_service.dart';
 import 'package:vos_sfa_go/features/orders/data/repositories/order_repository.dart';
 import '../core/api/global_sync_service.dart';
 import 'auth_provider.dart';
+import 'customer_provider.dart';
+import 'dap_providers.dart';
 
 final syncServiceProvider = Provider((ref) => GlobalSyncService());
 
@@ -99,6 +101,11 @@ class SyncNotifier extends StateNotifier<AsyncValue<void>> {
       } catch (e) {
         print('Error syncing attachments wrapper: $e');
       }
+
+      // Invalidate providers to force refresh of data from DB
+      _ref.invalidate(customersWithHistoryProvider);
+      _ref.invalidate(customerListProvider);
+      _ref.invalidate(dapByDateProvider);
 
       state = const AsyncValue.data(null);
     } catch (e, stack) {

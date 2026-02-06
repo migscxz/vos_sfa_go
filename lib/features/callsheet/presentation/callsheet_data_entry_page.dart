@@ -31,6 +31,7 @@ class _CallsheetDataEntryPageState
 
   // State
   bool _isLoading = true;
+  int _offset = 0; // 0 = newest 7 days
   List<String> _orderDates = [];
   List<Map<String, dynamic>> _productsData = [];
   final TextEditingController _poNumberCtrl = TextEditingController();
@@ -45,7 +46,11 @@ class _CallsheetDataEntryPageState
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final data = await _orderRepo.getCallsheetData(widget.customer.code);
+      final data = await _orderRepo.getCallsheetData(
+        widget.customer.code,
+        offset: _offset,
+        limit: 7, // 7 days view
+      );
       if (mounted) {
         setState(() {
           _orderDates = List<String>.from(data['dates'] ?? []);
@@ -136,6 +141,43 @@ class _CallsheetDataEntryPageState
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
+          // Pagination Controls
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Newer',
+            onPressed: _offset <= 0
+                ? null
+                : () {
+                    setState(() {
+                      _offset = (_offset - 7).clamp(0, 9999);
+                    });
+                    _loadData();
+                  },
+          ),
+          Center(
+            child: Text(
+              "Week ${(_offset / 7).floor() + 1}",
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Older',
+            // Disable if current view has fewer than 7 items (end of list)
+            // But strict check: on press, just go next. If empty, user can go back.
+            onPressed: () {
+              setState(() {
+                _offset += 7;
+              });
+              _loadData();
+            },
+          ),
+          const SizedBox(width: 8),
+
           // Upload Button
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -192,21 +234,24 @@ class _CallsheetDataEntryPageState
                         'No historical data found for this customer.',
                       ),
                     )
-                  : HorizontalDataTable(
-                      leftHandSideColumnWidth: leftColWidth,
-                      rightHandSideColumnWidth: rightWidth,
-                      isFixedHeader: true,
-                      headerWidgets: _buildHeaderWidgets(),
-                      leftSideItemBuilder: _buildLeftColumnItem,
-                      rightSideItemBuilder: _buildRightColumnItems,
-                      itemCount: _productsData.length,
-                      rowSeparatorWidget: const Divider(
-                        color: Colors.black,
-                        height: 1.0,
-                        thickness: 1.0,
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: HorizontalDataTable(
+                        leftHandSideColumnWidth: leftColWidth,
+                        rightHandSideColumnWidth: rightWidth,
+                        isFixedHeader: true,
+                        headerWidgets: _buildHeaderWidgets(),
+                        leftSideItemBuilder: _buildLeftColumnItem,
+                        rightSideItemBuilder: _buildRightColumnItems,
+                        itemCount: _productsData.length,
+                        rowSeparatorWidget: const Divider(
+                          color: AppColors.border,
+                          height: 1.0,
+                          thickness: 1.0,
+                        ),
+                        leftHandSideColBackgroundColor: Colors.white,
+                        rightHandSideColBackgroundColor: Colors.white,
                       ),
-                      leftHandSideColBackgroundColor: Colors.white,
-                      rightHandSideColBackgroundColor: Colors.white,
                     ),
             ),
           ],
@@ -248,11 +293,24 @@ class _CallsheetDataEntryPageState
           Expanded(
             flex: 1,
             child: Container(
-              height: 60,
+              height: 70,
               alignment: Alignment.center,
-              child: const Text(
-                "CALLSHEET / HISTORY",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              // Removed decoration (background & border)
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Removed Icon
+                  Text(
+                    "CALLSHEET",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: AppColors
+                          .primary, // Keeping color or changing to black? User didn't specify text color, just BG. Keeping primary for now.
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -276,7 +334,7 @@ class _CallsheetDataEntryPageState
             height: 24,
             decoration: const BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: Colors.black, width: 0.5),
+                bottom: BorderSide(color: AppColors.border, width: 0.5),
               ),
             ),
             alignment: Alignment.centerLeft,
@@ -315,10 +373,10 @@ class _CallsheetDataEntryPageState
       rightHeaders.add(
         _buildDoubleHeaderCell(
           topLabel: displayDate,
-          subLabel1: "Quantity",
-          subLabel2: "Inventory",
+          subLabel1: "Qty", // Shortened
+          subLabel2: "Inv", // Shortened
           width: dayColWidth,
-          color: Colors.grey[200],
+          color: const Color(0xFFF8FAFC), // Very light grey surface
         ),
       );
     }
@@ -339,9 +397,9 @@ class _CallsheetDataEntryPageState
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: color ?? Colors.white,
-        border: const Border(
-          bottom: BorderSide(color: Colors.black, width: 1.0),
-          right: BorderSide(color: Colors.black12, width: 0.5),
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 1.0),
+          right: BorderSide(color: AppColors.border, width: 0.5),
         ),
       ),
       alignment: alignment,
@@ -387,8 +445,8 @@ class _CallsheetDataEntryPageState
       decoration: BoxDecoration(
         color: color ?? Colors.white,
         border: const Border(
-          bottom: BorderSide(color: Colors.black, width: 1.0),
-          right: BorderSide(color: Colors.black12, width: 0.5),
+          bottom: BorderSide(color: AppColors.border, width: 1.0),
+          right: BorderSide(color: AppColors.border, width: 0.5),
         ),
       ),
       child: Column(
@@ -399,7 +457,7 @@ class _CallsheetDataEntryPageState
               alignment: Alignment.center,
               decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Colors.black12, width: 0.5),
+                  bottom: BorderSide(color: AppColors.border, width: 0.5),
                 ),
               ),
               child: Text(
@@ -420,7 +478,7 @@ class _CallsheetDataEntryPageState
                     alignment: Alignment.center,
                     decoration: const BoxDecoration(
                       border: Border(
-                        right: BorderSide(color: Colors.black12, width: 0.5),
+                        right: BorderSide(color: AppColors.border, width: 0.5),
                       ),
                     ),
                     child: Text(
@@ -464,10 +522,10 @@ class _CallsheetDataEntryPageState
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: isEven ? Colors.white : Colors.grey[50], // Zebra striping
-        border: const Border(
-          bottom: BorderSide(color: Colors.black12, width: 0.5),
-          right: BorderSide(color: Colors.black12, width: 0.5),
+        color: isEven ? Colors.white : const Color(0xFFF9FAFB),
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+          right: BorderSide(color: AppColors.border, width: 0.5),
         ),
       ),
       child: Text(
@@ -483,7 +541,7 @@ class _CallsheetDataEntryPageState
     final product = _productsData[index];
     final history = product['history'] as Map<String, dynamic>? ?? {};
     final isEven = index % 2 == 0;
-    final rowColor = isEven ? Colors.white : Colors.grey[50];
+    final rowColor = isEven ? Colors.white : const Color(0xFFF9FAFB);
 
     List<Widget> cells = [];
 
@@ -495,8 +553,8 @@ class _CallsheetDataEntryPageState
         decoration: BoxDecoration(
           color: rowColor,
           border: const Border(
-            right: BorderSide(color: Colors.black12, width: 0.5),
-            bottom: BorderSide(color: Colors.black12, width: 0.5),
+            right: BorderSide(color: AppColors.border, width: 0.5),
+            bottom: BorderSide(color: AppColors.border, width: 0.5),
           ),
         ),
         alignment: Alignment.center,
@@ -521,8 +579,8 @@ class _CallsheetDataEntryPageState
           decoration: BoxDecoration(
             color: rowColor,
             border: const Border(
-              right: BorderSide(color: Colors.black12, width: 0.5),
-              bottom: BorderSide(color: Colors.black12, width: 0.5),
+              right: BorderSide(color: AppColors.border, width: 0.5),
+              bottom: BorderSide(color: AppColors.border, width: 0.5),
             ),
           ),
           alignment: Alignment.center,
@@ -545,8 +603,8 @@ class _CallsheetDataEntryPageState
           decoration: BoxDecoration(
             color: rowColor,
             border: const Border(
-              right: BorderSide(color: Colors.black12, width: 0.5),
-              bottom: BorderSide(color: Colors.black12, width: 0.5),
+              right: BorderSide(color: AppColors.border, width: 0.5),
+              bottom: BorderSide(color: AppColors.border, width: 0.5),
             ),
           ),
           alignment: Alignment.center,

@@ -248,19 +248,23 @@ class OrderRepository {
     }).toList();
   }
 
-  Future<Map<String, dynamic>> getCallsheetData(String customerCode) async {
+  Future<Map<String, dynamic>> getCallsheetData(
+    String customerCode, {
+    int limit = 7,
+    int offset = 0,
+  }) async {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
 
-    // 1. Get last 8 order dates
+    // 1. Get last N limit order dates with offset
     final dateRows = await db.rawQuery(
       '''
       SELECT DISTINCT substr(created_date, 1, 10) as day 
       FROM sales_order 
       WHERE customer_code = ? 
       ORDER BY created_date DESC 
-      LIMIT 8
+      LIMIT ? OFFSET ?
     ''',
-      [customerCode],
+      [customerCode, limit, offset],
     );
 
     final List<String> dates = dateRows.map((r) => r['day'] as String).toList();

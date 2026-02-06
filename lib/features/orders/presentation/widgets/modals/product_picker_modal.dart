@@ -226,7 +226,9 @@ class _ProductPickerModalState extends State<ProductPickerModal> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      product.name,
+                                      product.description.isEmpty
+                                          ? product.name
+                                          : product.description,
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
