@@ -24,6 +24,7 @@ class OrderModel {
   final String? customerCode;
   final int? salesmanId;
   final int? supplierId;
+  final int? branchId;
   final DateTime orderDate;
   final String? deliveryDate;
   final String? paymentTerms;
@@ -76,6 +77,7 @@ class OrderModel {
     this.customerCode,
     this.salesmanId,
     this.supplierId,
+    this.branchId,
     required this.orderDate,
     this.deliveryDate,
     this.paymentTerms,
@@ -123,6 +125,7 @@ class OrderModel {
       customerCode: map['customer_code']?.toString(),
       salesmanId: (map['salesman_id'] as num?)?.toInt(),
       supplierId: (map['supplier_id'] as num?)?.toInt(),
+      branchId: (map['branch_id'] as num?)?.toInt(),
 
       orderDate:
           DateTime.tryParse((map['order_date'] ?? '').toString()) ??
@@ -180,6 +183,7 @@ class OrderModel {
       'customer_code': customerCode,
       'salesman_id': salesmanId,
       'supplier_id': supplierId,
+      'branch_id': branchId,
       'order_date': orderDate.toIso8601String().split('T')[0], // YYYY-MM-DD
       'delivery_date': deliveryDate,
       'payment_terms': paymentTerms,
@@ -222,6 +226,7 @@ class OrderModel {
     String? customerCode,
     int? salesmanId,
     int? supplierId,
+    int? branchId,
     DateTime? orderDate,
     String? deliveryDate,
     String? paymentTerms,
@@ -254,6 +259,7 @@ class OrderModel {
       customerCode: customerCode ?? this.customerCode,
       salesmanId: salesmanId ?? this.salesmanId,
       supplierId: supplierId ?? this.supplierId,
+      branchId: branchId ?? this.branchId,
       orderDate: orderDate ?? this.orderDate,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       paymentTerms: paymentTerms ?? this.paymentTerms,

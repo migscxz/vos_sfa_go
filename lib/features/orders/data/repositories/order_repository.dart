@@ -2,6 +2,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../../../core/database/database_manager.dart';
 import '../../../../data/models/order_model.dart';
+import '../../../../data/models/product_model.dart'; // Needed for Product.getPrice
+import '../../../../data/models/discount_models.dart';
 import '../models/cart_item_model.dart';
 
 class OrderRepository {
@@ -74,14 +76,20 @@ class OrderRepository {
       batch.insert('sales_order_details', {
         'order_id': newOrderId,
         'product_id': item.productId,
-        'unit_price': item.price,
+        // Store BASE price if available, else Net
+        'unit_price': item.originalPrice ?? item.price,
         'ordered_quantity': item.quantity,
-        'gross_amount': item.total,
-        'net_amount': item.total,
+        // Gross = Base * Qty
+        'gross_amount': (item.originalPrice ?? item.price) * item.quantity,
+        'net_amount': item.total, // Net * Qty
+        // Discount Amount (Total for this line)
+        'discount_amount': item.quantity * item.discountAmount,
+        'discount_type': item.discountTypeId, // ID
+        'allocated_quantity': item.quantity, // Auto-allocate on creation
+        'served_quantity': 0, // Not served yet
+        'allocated_amount': item.total, // Net amount
         'created_date': order.createdAt.toIso8601String(),
         'remarks': '',
-        // Note: discount_type and other nullable fields not included
-        // to avoid foreign key errors when syncing to Directus
       });
     }
     await batch.commit(noResult: true);
@@ -280,6 +288,7 @@ class OrderRepository {
       SELECT 
         d.product_id, 
         p.product_name, 
+        p.description,
         p.price_per_unit, 
         substr(s.created_date, 1, 10) as day, 
         SUM(d.ordered_quantity) as qty
@@ -301,12 +310,16 @@ class OrderRepository {
       final day = row['day'] as String;
       final qty = (row['qty'] as num).toDouble();
       final name = (row['product_name'] ?? '').toString();
+      final description = (row['description'] ?? '').toString();
+      // Use description if available, else name
+      final display = description.isNotEmpty ? description : name;
+
       final price = (row['price_per_unit'] as num?)?.toDouble() ?? 0.0;
 
       if (!productMap.containsKey(pid)) {
         productMap[pid] = {
           'id': pid,
-          'name': name,
+          'name': display,
           'price': price,
           'history': <String, double>{},
         };
@@ -457,4 +470,202 @@ class OrderRepository {
     final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
     await db.delete('sales_order_attachment', where: 'id = ?', whereArgs: [id]);
   }
+
+  // --- PRICE & DISCOUNT LOGIC ---
+
+  Future<PriceCalculationResult> calculateProductPrice({
+    required Product product,
+    required String customerCode,
+    required int supplierId,
+    required String priceType, // from Customer or Salesman
+  }) async {
+    final db = await DatabaseManager().getDatabase(DatabaseManager.dbSales);
+
+    double basePrice = 0.0;
+    int? discountTypeId;
+    String discountName = "";
+
+    // Step A: Determine Base Price & Check for Product-Customer Override
+    // -------------------------------------------------------------
+    // Priority 1: Check product_per_customer
+    final List<Map<String, dynamic>> ppcRows = await db.query(
+      'product_per_customer',
+      where: 'customer_code = ? AND product_id = ?',
+      whereArgs: [customerCode, product.id],
+    );
+
+    ProductPerCustomer? ppc;
+    if (ppcRows.isNotEmpty) {
+      ppc = ProductPerCustomer.fromMap(ppcRows.first);
+    }
+
+    // Logic: If unit_price > 0 in Override, use it. Else use standard list price.
+    if (ppc != null && ppc.unitPrice > 0) {
+      basePrice = ppc.unitPrice;
+    } else {
+      basePrice = product.getPrice(priceType);
+    }
+
+    // Step B: Determine Discount Scheme (Priority Order)
+    // -------------------------------------------------------------
+
+    // 1. Product-Customer Specific
+    if (ppc != null && ppc.discountType != null) {
+      discountTypeId = ppc.discountType;
+    }
+
+    // 2. Supplier-Category-Customer Specific (if not found yet)
+    if (discountTypeId == null) {
+      // Note: We might need product category_id here.
+      // Assuming 0 or null for now if not strictly enforced, asking DB.
+      // Or query strictly by customer + supplier.
+      // The schema has category_id. We'll try to match exact first.
+      // For now, let's query broad matches for this customer+supplier
+      final List<Map<String, dynamic>> scdRows = await db.query(
+        'supplier_category_discount_per_customer',
+        where: 'customer_code = ? AND supplier_id = ?',
+        whereArgs: [customerCode, supplierId],
+      );
+
+      if (scdRows.isNotEmpty) {
+        // Filter in memory if we need strict category matching
+        // For simple logic, take the first one or match category if product has it.
+        // Assuming product.product_category match.
+        // If product.product_category is int.
+        // Let's iterate
+        for (var row in scdRows) {
+          final scd = SupplierCategoryDiscountPerCustomer.fromMap(row);
+          if (scd.categoryId == null ||
+              scd.categoryId == 0 ||
+              scd.categoryId == product.productCategory) {
+            discountTypeId = scd.discountType;
+            break;
+          }
+        }
+      }
+    }
+
+    // 3. Product-Supplier Specific (if not found yet)
+    if (discountTypeId == null) {
+      // product_per_supplier
+      final List<Map<String, dynamic>> ppsRows = await db.query(
+        'product_per_supplier',
+        where: 'product_id = ? AND supplier_id = ?',
+        whereArgs: [product.id, supplierId],
+      );
+      if (ppsRows.isNotEmpty) {
+        final pps = ProductPerSupplier.fromMap(ppsRows.first);
+        discountTypeId = pps.discountType;
+      }
+    }
+
+    // 4. Global Customer Discount (if not found yet)
+    if (discountTypeId == null) {
+      // We need to fetch customer discount_type string "L7/L2" and find its ID in discount_type table?
+      // The customer table has `discount_type` text column (e.g. "L7/L2") OR is it an ID?
+      // User Request sample: "discount_type": "L7/L2" (id 125).
+      // Customer table sample: "discount_type": null (TEXT).
+      // We need to resolve the TEXT "L7/L2" to `discount_type.id`.
+      // OR maybe `discount_type` column in customer IS the ID?
+      // Schema says `discount_type TEXT` in customer table.
+      // But `discount_type` TABLE has `id` and `discount_type` (name).
+      // So likely customer stores the NAME "L7/L2". We need to find ID where name = "L7/L2".
+
+      final List<Map<String, dynamic>> custRows = await db.query(
+        'customer',
+        columns: ['discount_type'],
+        where: 'customer_code = ?',
+        whereArgs: [customerCode],
+      );
+
+      if (custRows.isNotEmpty && custRows.first['discount_type'] != null) {
+        final String? dTypeStr = custRows.first['discount_type']?.toString();
+        if (dTypeStr != null && dTypeStr.isNotEmpty) {
+          // Find ID in discount_type table
+          final List<Map<String, dynamic>> dtRows = await db.query(
+            'discount_type',
+            where: 'discount_type = ?',
+            whereArgs: [dTypeStr],
+          );
+          if (dtRows.isNotEmpty) {
+            discountTypeId = (dtRows.first['id'] as num?)?.toInt();
+          }
+        }
+      }
+    }
+
+    // Step C: Calculate Net Amount
+    // -------------------------------------------------------------
+    double netPrice = basePrice;
+    double totalDiscountAmount = 0.0;
+
+    if (discountTypeId != null) {
+      // Fetch name for completeness
+      if (discountName.isEmpty) {
+        final List<Map<String, dynamic>> dtRows = await db.query(
+          'discount_type',
+          where: 'id = ?',
+          whereArgs: [discountTypeId],
+        );
+        if (dtRows.isNotEmpty) {
+          discountName = dtRows.first['discount_type'] as String? ?? '';
+        }
+      }
+
+      // Fetch components: line_per_discount_type -> line_discount
+      // Join query would be nicer but let's do split queries for safety/compat
+      final List<Map<String, dynamic>> lineLinks = await db.query(
+        'line_per_discount_type',
+        where: 'type_id = ?',
+        whereArgs: [discountTypeId],
+      );
+
+      for (var link in lineLinks) {
+        final lineId = (link['line_id'] as num?)?.toInt() ?? 0;
+        final List<Map<String, dynamic>> lineRows = await db.query(
+          'line_discount',
+          where: 'id = ?',
+          whereArgs: [lineId],
+        );
+
+        if (lineRows.isNotEmpty) {
+          final line = LineDiscount.fromMap(lineRows.first);
+          // Assuming CHAIN discount.
+          // Percentage: If stored as 1.0 (mean 1%) -> divide by 100.
+          // If stored as 0.01 (mean 1%) -> use as is.
+          // User sample: "1.0000" for "L1". Most likely means 1%.
+          // "7.0000" for "L7".
+          // So we divide by 100.
+          double factor = line.percentage / 100.0;
+          netPrice = netPrice * (1.0 - factor);
+        }
+      }
+    }
+
+    totalDiscountAmount = basePrice - netPrice;
+
+    return PriceCalculationResult(
+      basePrice: basePrice,
+      netPrice: netPrice,
+      discountTypeId: discountTypeId,
+      discountAmount: totalDiscountAmount,
+      discountName: discountName,
+    );
+  }
+}
+
+class PriceCalculationResult {
+  final double basePrice;
+  final double netPrice;
+  final int? discountTypeId;
+  final double discountAmount;
+  final String discountName;
+
+  PriceCalculationResult({
+    required this.basePrice,
+    required this.netPrice,
+    this.discountTypeId,
+    required this.discountAmount,
+    this.discountName = '',
+  });
 }

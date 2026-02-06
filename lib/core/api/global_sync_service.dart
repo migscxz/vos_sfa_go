@@ -129,6 +129,12 @@ class GlobalSyncService {
 
             if (filtered.isEmpty) continue;
 
+            // Filter inactive Customer/Supplier locally to prevent them from showing up
+            if (tableName == 'customer' || tableName == 'supplier') {
+              final isActive = (normalized['isActive'] as num?)?.toInt() ?? 1;
+              if (isActive != 1) continue;
+            }
+
             batch.insert(
               tableName,
               filtered,
@@ -398,6 +404,10 @@ class GlobalSyncService {
 
             if (filtered.isEmpty) continue;
 
+            // Filter inactive Customer
+            final isActive = (normalized['isActive'] as num?)?.toInt() ?? 1;
+            if (isActive != 1) continue;
+
             batch.insert(
               'customer',
               filtered,
@@ -428,6 +438,10 @@ class GlobalSyncService {
           final filtered = _filterByColumns(sanitized, sColumns);
 
           if (filtered.isEmpty) continue;
+
+          // Filter inactive Supplier
+          final isActive = (normalized['isActive'] as num?)?.toInt() ?? 1;
+          if (isActive != 1) continue;
 
           batch.insert(
             'supplier',

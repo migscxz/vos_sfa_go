@@ -4,7 +4,11 @@ import '../data/models/customer_model.dart';
 
 final customerListProvider = FutureProvider<List<Customer>>((ref) async {
   final db = await DatabaseManager().getDatabase();
-  final result = await db.query('customer');
+  final result = await db.query(
+    'customer',
+    where: 'isActive = ?',
+    whereArgs: [1],
+  );
 
   if (result.isEmpty) {
     return <Customer>[];
@@ -25,6 +29,7 @@ final customersWithHistoryProvider = FutureProvider<List<Customer>>((
     SELECT DISTINCT c.* 
     FROM customer c 
     JOIN sales_order s ON c.customer_code = s.customer_code
+    WHERE c.isActive = 1
   ''');
 
   if (result.isEmpty) {

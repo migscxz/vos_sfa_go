@@ -24,7 +24,9 @@ class DatabaseManager {
 
   // 🔺 bump version when you add/rename tables/columns
   // Version 7: Added sales_order_attachment
-  static const int _dbVersion = 8;
+  // Version 8: Fix sales_return schema
+  // Version 9: Added discount tables
+  static const int _dbVersion = 9;
 
   Database? _db;
 
@@ -112,6 +114,13 @@ class DatabaseManager {
     await db.execute(TableSchemas.dailyActionPlanTable);
     await db.execute(TableSchemas.monthlyCoveragePlanTable);
     await db.execute(TableSchemas.dapAttachmentTable);
+
+    // --- DISCOUNTS ---
+    await db.execute(TableSchemas.discountTypeTable);
+    await db.execute(TableSchemas.lineDiscountTable);
+    await db.execute(TableSchemas.linePerDiscountTypeTable);
+    await db.execute(TableSchemas.supplierCategoryDiscountPerCustomerTable);
+    await db.execute(TableSchemas.productPerCustomerTable);
   }
 
   // ✅ Real migrations (ALTER TABLE) for existing installs
@@ -154,7 +163,17 @@ class DatabaseManager {
       await db.execute('DROP TABLE IF EXISTS sales_return_details');
       await db.execute('DROP TABLE IF EXISTS sales_return');
       await db.execute(TableSchemas.salesReturnTable);
+      await db.execute(TableSchemas.salesReturnTable);
       await db.execute(TableSchemas.salesReturnDetailsTable);
+    }
+
+    // v9 migrations: Discount tables
+    if (oldVersion < 9) {
+      await db.execute(TableSchemas.discountTypeTable);
+      await db.execute(TableSchemas.lineDiscountTable);
+      await db.execute(TableSchemas.linePerDiscountTypeTable);
+      await db.execute(TableSchemas.supplierCategoryDiscountPerCustomerTable);
+      await db.execute(TableSchemas.productPerCustomerTable);
     }
   }
 

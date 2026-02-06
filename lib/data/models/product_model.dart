@@ -17,12 +17,14 @@ class Product {
 
   final int? unitId;
   final int? parentId;
+  final int? productCategory; // Added
 
   const Product({
     required this.id,
     required this.name,
     required this.code,
     required this.description,
+    this.productCategory, // Added
     this.unitId,
     this.parentId,
     this.uom = '',
@@ -77,6 +79,9 @@ class Product {
     final pId = (map['parent_id'] is num)
         ? (map['parent_id'] as num).toInt()
         : null;
+    final catId = (map['product_category'] is num)
+        ? (map['product_category'] as num).toInt()
+        : null;
 
     return Product(
       id: (map['product_id'] ?? 0) as int,
@@ -85,6 +90,7 @@ class Product {
       description: (map['description'] ?? '').toString(),
       unitId: uomId,
       parentId: pId,
+      productCategory: catId,
       uom: uomLabel,
       uomCount: (map['unit_of_measurement_count'] is num)
           ? (map['unit_of_measurement_count'] as num).toDouble()

@@ -17,7 +17,16 @@ class CartItem {
     required this.selectedUnitDisplay,
     required this.quantity,
     required this.price,
+    this.originalPrice,
+    this.discountAmount = 0.0,
+    this.discountTypeId,
+    this.discountName,
   });
+
+  final double? originalPrice;
+  final double discountAmount;
+  final int? discountTypeId;
+  final String? discountName;
 
   double get total => price * quantity;
 
@@ -30,6 +39,10 @@ class CartItem {
     String? selectedUnitDisplay,
     int? quantity,
     double? price,
+    double? originalPrice,
+    double? discountAmount,
+    int? discountTypeId,
+    String? discountName,
   }) {
     return CartItem(
       productDisplay: productDisplay ?? this.productDisplay,
@@ -40,6 +53,10 @@ class CartItem {
       selectedUnitDisplay: selectedUnitDisplay ?? this.selectedUnitDisplay,
       quantity: quantity ?? this.quantity,
       price: price ?? this.price,
+      originalPrice: originalPrice ?? this.originalPrice,
+      discountAmount: discountAmount ?? this.discountAmount,
+      discountTypeId: discountTypeId ?? this.discountTypeId,
+      discountName: discountName ?? this.discountName,
     );
   }
 }

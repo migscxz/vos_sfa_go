@@ -19,6 +19,7 @@ import '../../callsheet/presentation/callsheet_capture_page.dart';
 import '../data/models/cart_item_model.dart';
 import 'widgets/modals/product_picker_modal.dart';
 import 'checkout_page.dart';
+import '../data/repositories/order_repository.dart';
 
 class OrderFormPage extends ConsumerStatefulWidget {
   const OrderFormPage({
@@ -103,8 +104,17 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     return _allProducts.where((p) => allowedIds.contains(p.id)).toList();
   }
 
-  // This will be overridden by salesman.priceType (A/B/etc.) if available
-  List<String> _priceTypes = const ['Retail', 'Wholesale', 'Promo'];
+  // This will be overridden or used as base
+  List<String> _priceTypes = const [
+    'Retail',
+    'Wholesale',
+    'Promo',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+  ];
 
   bool _isLoadingMasters = false;
 
@@ -145,10 +155,20 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     final String? salesmanPriceType = salesman?.priceType;
 
     if (salesmanPriceType != null && salesmanPriceType.isNotEmpty) {
-      _priceTypes = [salesmanPriceType];
+      // Ensure the salesman's type is in the list
+      if (!_priceTypes.contains(salesmanPriceType)) {
+        _priceTypes = [..._priceTypes, salesmanPriceType];
+      }
       _selectedPriceType = salesmanPriceType;
     } else {
-      _selectedPriceType = _priceTypes.first;
+      _selectedPriceType = 'Retail'; // Default
+    }
+
+    // Auto-select based on initial customer if present
+    if (_selectedCustomer != null && _selectedCustomer!.priceType != null) {
+      if (_priceTypes.contains(_selectedCustomer!.priceType)) {
+        _selectedPriceType = _selectedCustomer!.priceType;
+      }
     }
 
     _loadMasterData();
@@ -270,7 +290,13 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
     final rows = await db.query(
       'customer',
-      columns: ['id', 'customer_name', 'customer_code', 'isActive'],
+      columns: [
+        'id',
+        'customer_name',
+        'customer_code',
+        'isActive',
+        'price_type',
+      ],
     );
 
     final List<Customer> customers = [];
@@ -289,8 +315,9 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       if (id == null) continue;
 
       final code = (row['customer_code'] ?? '').toString();
+      final pType = row['price_type'] as String?;
 
-      customers.add(Customer(id: id, name: name, code: code));
+      customers.add(Customer(id: id, name: name, code: code, priceType: pType));
     }
 
     customers.sort((a, b) => a.name.compareTo(b.name));
@@ -332,6 +359,23 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
               _selectedCustomer = customer;
               _customerNameCtrl.text = customer.name;
               _customerCodeCtrl.text = customer.code;
+
+              // Auto-select price type if available
+              if (customer.priceType != null &&
+                  customer.priceType!.isNotEmpty &&
+                  _priceTypes.contains(customer.priceType)) {
+                _selectedPriceType = customer.priceType;
+              } else {
+                // If customer has NO price type, revert to Salesman default (if set) or Retail
+                final authState = ref.read(authProvider);
+                final salesman = authState.salesman;
+                if (salesman?.priceType != null &&
+                    salesman!.priceType!.isNotEmpty) {
+                  _selectedPriceType = salesman.priceType;
+                } else {
+                  _selectedPriceType = 'Retail';
+                }
+              }
             });
           }
         },
@@ -347,49 +391,113 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       return;
     }
 
+    final supplierId = _supplierIdByName[_selectedSupplier!];
+    final customerCode = _selectedCustomer?.code;
+
+    if (supplierId == null || customerCode == null) {
+      // Should not happen if validation passes
+      return;
+    }
+
     await showDialog(
       context: context,
       builder: (context) => ProductPickerModal(
         products: _currentProducts,
         priceType: _selectedPriceType ?? 'Retail',
-        onProductsSelected: (selections) {
+        onProductsSelected: (selections) async {
           if (selections.isEmpty) return;
 
-          setState(() {
-            for (final sel in selections) {
-              final product = sel.product;
-              final qty = sel.quantity;
-              final price = product.getPrice(_selectedPriceType ?? 'Retail');
+          // Show loading indicator while calculating prices?
+          // Or just do it quickly. SQLite is fast.
+          // Ideally show a loader if many items.
 
-              // Check if already in cart?
-              // For now, simpler to just add new line or update existing.
-              // Let's update if exists.
+          final repo = OrderRepository();
+          final List<CartItem> newItems = [];
+
+          for (final sel in selections) {
+            final product = sel.product;
+            final qty = sel.quantity;
+
+            try {
+              // Calculate Price/Discount
+              final priceResult = await repo.calculateProductPrice(
+                product: product,
+                customerCode: customerCode,
+                supplierId: supplierId,
+                priceType: _selectedPriceType ?? 'Retail',
+              );
+
+              newItems.add(
+                CartItem(
+                  productDisplay: product.description.isNotEmpty
+                      ? product.description
+                      : product.name,
+                  productId: product.id,
+                  productBaseId: product.parentId ?? product.id,
+                  unitId: product.unitId,
+                  unitCount: product.uomCount,
+                  selectedUnitDisplay: product.uom.isNotEmpty
+                      ? product.uom
+                      : 'UNIT',
+                  quantity: qty,
+                  price: priceResult.netPrice, // NET Price
+                  originalPrice: priceResult.basePrice,
+                  discountAmount: priceResult.discountAmount, // Per Unit
+                  discountTypeId: priceResult.discountTypeId,
+                  discountName: priceResult.discountName,
+                ),
+              );
+            } catch (e) {
+              debugPrint('Error calculating price for ${product.name}: $e');
+              // Fallback: Add with base prices
+              newItems.add(
+                CartItem(
+                  productDisplay: product.description.isNotEmpty
+                      ? product.description
+                      : product.name,
+                  productId: product.id,
+                  productBaseId: product.parentId ?? product.id,
+                  unitId: product.unitId,
+                  unitCount: product.uomCount,
+                  selectedUnitDisplay: product.uom.isNotEmpty
+                      ? product.uom
+                      : 'UNIT',
+                  quantity: qty,
+                  price: product.getPrice(_selectedPriceType ?? 'Retail'),
+                  originalPrice: product.getPrice(
+                    _selectedPriceType ?? 'Retail',
+                  ),
+                  discountAmount: 0.0,
+                  discountTypeId: null,
+                  discountName: null,
+                ),
+              );
+            }
+          }
+
+          if (!mounted) return;
+
+          setState(() {
+            for (final newItem in newItems) {
               final existingIndex = _cartItems.indexWhere(
-                (item) => item.productId == product.id,
+                (item) => item.productId == newItem.productId,
               );
 
               if (existingIndex >= 0) {
                 // Update existing
                 final existing = _cartItems[existingIndex];
                 _cartItems[existingIndex] = existing.copyWith(
-                  quantity: existing.quantity + qty,
+                  quantity: existing.quantity + newItem.quantity,
+                  // Should we update price? Yes, in case it changed or context changed.
+                  price: newItem.price,
+                  originalPrice: newItem.originalPrice,
+                  discountAmount: newItem.discountAmount,
+                  discountTypeId: newItem.discountTypeId,
+                  discountName: newItem.discountName,
                 );
               } else {
                 // Add new
-                _cartItems.add(
-                  CartItem(
-                    productDisplay: product.name,
-                    productId: product.id,
-                    productBaseId: product.parentId ?? product.id,
-                    unitId: product.unitId,
-                    unitCount: product.uomCount,
-                    selectedUnitDisplay: product.uom.isNotEmpty
-                        ? product.uom
-                        : 'UNIT',
-                    quantity: qty,
-                    price: price,
-                  ),
-                );
+                _cartItems.add(newItem);
               }
             }
           });
@@ -877,6 +985,24 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
         : null;
     final authState = ref.read(authProvider);
     final salesmanId = authState.salesman?.id ?? authState.user?.userId;
+    // Get branchId from Salesman model
+    final branchId = authState.salesman?.branchId;
+
+    // Calculate Totals
+    double grossTotal = 0.0;
+    double discountTotal = 0.0;
+    double netTotal = 0.0;
+
+    for (final item in _cartItems) {
+      final qty = item.quantity;
+      final base = item.originalPrice ?? item.price;
+      final net = item.price;
+      final discount = item.discountAmount; // Per unit
+
+      grossTotal += base * qty;
+      netTotal += net * qty;
+      discountTotal += discount * qty;
+    }
 
     // Create order header template
     final orderTemplate = OrderModel(
@@ -886,10 +1012,12 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
       customerCode: _customerCodeCtrl.text.trim(),
       salesmanId: salesmanId,
       supplierId: supplierId,
+      branchId: branchId,
       orderDate: now,
       createdAt: now,
-      totalAmount: _grandTotal,
-      netAmount: _grandTotal,
+      totalAmount: grossTotal, // Gross
+      discountAmount: discountTotal, // Discount
+      netAmount: netTotal, // Net
       status: 'Pending',
       type: OrderType.manual,
       supplier: _selectedSupplier,
@@ -1318,6 +1446,67 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                                                   });
                                                 },
                                               ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          // Price Display
+                                          Row(
+                                            children: [
+                                              if (item.originalPrice != null &&
+                                                  item.originalPrice! >
+                                                      item.price) ...[
+                                                Text(
+                                                  '₱${item.originalPrice!.toStringAsFixed(2)}',
+                                                  style: const TextStyle(
+                                                    decoration: TextDecoration
+                                                        .lineThrough,
+                                                    color: Colors.grey,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                              ],
+                                              Text(
+                                                '₱${item.price.toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.primary,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              if (item.discountName != null &&
+                                                  item
+                                                      .discountName!
+                                                      .isNotEmpty) ...[
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.orange[50],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                    border: Border.all(
+                                                      color:
+                                                          Colors.orange[200]!,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    item.discountName!,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.orange[800],
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                           const SizedBox(height: 8),
