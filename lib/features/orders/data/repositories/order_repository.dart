@@ -205,6 +205,32 @@ class OrderRepository {
           'UPDATE sales_order SET allocated_amount = total_amount WHERE allocated_amount IS NULL AND total_amount IS NOT NULL',
         );
       }
+
+      // Check sales_order_details columns
+      final List<Map<String, dynamic>> detailCols = await db.rawQuery(
+        'PRAGMA table_info(sales_order_details)',
+      );
+      final existingDetailCols = detailCols
+          .map((c) => c['name'] as String)
+          .toSet();
+
+      final missingDetailCols = {
+        'discount_type': 'REAL',
+        'discount_amount': 'REAL',
+        'allocated_quantity': 'INTEGER',
+        'served_quantity': 'INTEGER',
+        'allocated_amount': 'REAL',
+        'gross_amount': 'REAL',
+        'net_amount': 'REAL',
+      };
+
+      for (final entry in missingDetailCols.entries) {
+        if (!existingDetailCols.contains(entry.key)) {
+          await db.execute(
+            'ALTER TABLE sales_order_details ADD COLUMN ${entry.key} ${entry.value}',
+          );
+        }
+      }
     } catch (e) {
       // Ignore migration errors
     }

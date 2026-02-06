@@ -27,7 +27,7 @@ class LineDiscount {
     return LineDiscount(
       id: (map['id'] as num?)?.toInt() ?? 0,
       lineDiscount: map['line_discount'] as String? ?? '',
-      percentage: (map['percentage'] as num?)?.toDouble() ?? 0.0,
+      percentage: double.tryParse(map['percentage']?.toString() ?? '') ?? 0.0,
     );
   }
 }
@@ -103,7 +103,7 @@ class ProductPerCustomer {
       customerCode: map['customer_code'] as String? ?? '',
       productId: (map['product_id'] as num?)?.toInt() ?? 0,
       discountType: (map['discount_type'] as num?)?.toInt(),
-      unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 0.0,
+      unitPrice: double.tryParse(map['unit_price']?.toString() ?? '') ?? 0.0,
       dateAdded: map['date_added'] as String? ?? '',
     );
   }

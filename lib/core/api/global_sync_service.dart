@@ -63,6 +63,13 @@ class GlobalSyncService {
           'sales_invoice_details': ApiConfig.salesInvoiceDetails,
           'sales_return': ApiConfig.salesReturn,
           'sales_return_details': ApiConfig.salesReturnDetails,
+          // Discount & Overrides
+          'product_per_customer': ApiConfig.productPerCustomer,
+          'supplier_category_discount_per_customer':
+              ApiConfig.supplierCategoryDiscountPerCustomer,
+          'discount_type': ApiConfig.discountTypes,
+          'line_per_discount_type': ApiConfig.linePerDiscountType,
+          'line_discount': ApiConfig.lineDiscount,
         },
       );
     } else {
@@ -593,6 +600,147 @@ class GlobalSyncService {
           );
         } catch (e) {
           print('Error syncing product_per_supplier: $e');
+        }
+
+        // 1c) Discount & Overrides (Global/Salesman scope)
+        // Ideally we filter these by customer/salesman, but for now we sync global/list
+        // to ensure offline calculation works.
+        try {
+          // product_per_customer
+          final ppcList = await _api.fetchList(
+            ApiConfig.productPerCustomer,
+            query: {'limit': '-1'},
+          );
+          batch.delete('product_per_customer');
+          final ppcCols = await _getTableColumns(
+            executor: txn,
+            cacheKey: '${DatabaseManager.dbSales}::product_per_customer',
+            tableName: 'product_per_customer',
+          );
+          for (final row in ppcList) {
+            final f = _filterByColumns(
+              _sanitizeForSqlite(
+                _normalizeForTable('product_per_customer', row),
+              ),
+              ppcCols,
+            );
+            if (f.isNotEmpty)
+              batch.insert(
+                'product_per_customer',
+                f,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+          }
+
+          // supplier_category_discount_per_customer
+          final scdList = await _api.fetchList(
+            ApiConfig.supplierCategoryDiscountPerCustomer,
+            query: {'limit': '-1'},
+          );
+          batch.delete('supplier_category_discount_per_customer');
+          final scdCols = await _getTableColumns(
+            executor: txn,
+            cacheKey:
+                '${DatabaseManager.dbSales}::supplier_category_discount_per_customer',
+            tableName: 'supplier_category_discount_per_customer',
+          );
+          for (final row in scdList) {
+            final f = _filterByColumns(
+              _sanitizeForSqlite(
+                _normalizeForTable(
+                  'supplier_category_discount_per_customer',
+                  row,
+                ),
+              ),
+              scdCols,
+            );
+            if (f.isNotEmpty)
+              batch.insert(
+                'supplier_category_discount_per_customer',
+                f,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+          }
+
+          // discount_type
+          final dtList = await _api.fetchList(
+            ApiConfig.discountTypes,
+            query: {'limit': '-1'},
+          );
+          batch.delete('discount_type');
+          final dtCols = await _getTableColumns(
+            executor: txn,
+            cacheKey: '${DatabaseManager.dbSales}::discount_type',
+            tableName: 'discount_type',
+          );
+          for (final row in dtList) {
+            final f = _filterByColumns(
+              _sanitizeForSqlite(_normalizeForTable('discount_type', row)),
+              dtCols,
+            );
+            if (f.isNotEmpty)
+              batch.insert(
+                'discount_type',
+                f,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+          }
+
+          // line_per_discount_type
+          final lpdtList = await _api.fetchList(
+            ApiConfig.linePerDiscountType,
+            query: {'limit': '-1'},
+          );
+          batch.delete('line_per_discount_type');
+          final lpdtCols = await _getTableColumns(
+            executor: txn,
+            cacheKey: '${DatabaseManager.dbSales}::line_per_discount_type',
+            tableName: 'line_per_discount_type',
+          );
+          for (final row in lpdtList) {
+            final f = _filterByColumns(
+              _sanitizeForSqlite(
+                _normalizeForTable('line_per_discount_type', row),
+              ),
+              lpdtCols,
+            );
+            if (f.isNotEmpty)
+              batch.insert(
+                'line_per_discount_type',
+                f,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+          }
+
+          // line_discount
+          final ldList = await _api.fetchList(
+            ApiConfig.lineDiscount,
+            query: {'limit': '-1'},
+          );
+          batch.delete('line_discount');
+          final ldCols = await _getTableColumns(
+            executor: txn,
+            cacheKey: '${DatabaseManager.dbSales}::line_discount',
+            tableName: 'line_discount',
+          );
+          for (final row in ldList) {
+            final f = _filterByColumns(
+              _sanitizeForSqlite(_normalizeForTable('line_discount', row)),
+              ldCols,
+            );
+            if (f.isNotEmpty)
+              batch.insert(
+                'line_discount',
+                f,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+          }
+
+          print(
+            'Synced Discount Tables (ppc:${ppcList.length}, scd:${scdList.length}, dt:${dtList.length})',
+          );
+        } catch (e) {
+          print('Error syncing discount/override tables: $e');
         }
 
         // 2) sales_order filtered by salesman

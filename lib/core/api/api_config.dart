@@ -24,4 +24,12 @@ class ApiConfig {
   static const String productPerSupplier = "/product_per_supplier";
   static const String units = "/units";
   static const String salesOrderAttachment = "/sales_order_attachment";
+
+  // Discount Endpoints
+  static const String discountTypes = "/discount_type";
+  static const String linePerDiscountType = "/line_per_discount_type";
+  static const String lineDiscount = "/line_discount";
+  static const String productPerCustomer = "/product_per_customer";
+  static const String supplierCategoryDiscountPerCustomer =
+      "/supplier_category_discount_per_customer";
 }
